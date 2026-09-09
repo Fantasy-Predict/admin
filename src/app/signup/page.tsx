@@ -22,6 +22,7 @@ export default function SignupPage() {
   const [creating, setCreating] = useState(false);
   const [verifying, setVerifying] = useState(false);
 
+  
   async function handleCreate(e: FormEvent) {
     e.preventDefault();
     if (!email || !password) {
