@@ -7,16 +7,16 @@ import { Badge } from "../_components/ui/badge";
 import { Button } from "../_components/ui/button";
 import { Input } from "../_components/ui/input";
 import { formatNaira } from "../_lib/mock-data";
-import { getAdminUsers, type AdminUser } from "../_lib/api";
+import { getUsers, type PlatformUser } from "../_lib/api";
 
 export default function AdminUsers() {
   const [query, setQuery] = useState("");
-  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [users, setUsers] = useState<PlatformUser[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
-    getAdminUsers()
+    getUsers()
       .then((data) => {
         if (active && Array.isArray(data)) setUsers(data);
       })

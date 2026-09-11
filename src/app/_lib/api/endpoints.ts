@@ -138,6 +138,71 @@ export async function getAdminDashboard(): Promise<AdminDashboard> {
 }
 
 // ============================================================
+// Platform users (players) — GET /v1/users
+// The /users admin page shows PLAYER accounts, fetched from
+// /v1/users (NOT /v1/admins, which lists admin accounts).
+// ============================================================
+
+export type PlatformUser = {
+  id: string;
+  username: string;
+  email: string;
+  country: string;
+  joined: string;
+  balance: number;
+  status: string;
+};
+
+type PlatformUserDoc = {
+  _id?: string;
+  id?: string;
+  username?: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  countryCode?: string;
+  phoneNumber?: string;
+  isActive?: boolean;
+  createdAt?: string;
+};
+
+function formatUserDate(iso: string | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+}
+
+function toPlatformUser(u: PlatformUserDoc): PlatformUser {
+  const fullName = [u.firstName, u.lastName].filter(Boolean).join(" ");
+  return {
+    id: u._id ?? u.id ?? "",
+    username: u.username ?? (fullName || (u.email ? u.email.split("@")[0] : "Unknown user")),
+    email: u.email ?? "",
+    country: u.countryCode ?? "",
+    joined: formatUserDate(u.createdAt),
+    balance: 0,
+    status: u.isActive === false ? "suspended" : "active",
+  };
+}
+
+export async function getUsers(
+  filters: { username?: string; firstName?: string; lastName?: string; email?: string; phoneNumber?: string } = {},
+): Promise<PlatformUser[]> {
+  const params = new URLSearchParams();
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value) params.set(key, value);
+  });
+  const qs = params.toString();
+  const res = await apiFetch<{ docs?: PlatformUserDoc[] } | PlatformUserDoc[]>(
+    `/v1/users${qs ? `?${qs}` : ""}`,
+  );
+  const list = Array.isArray(res) ? res : (res?.docs ?? []);
+  return list.map(toPlatformUser);
+}
+
+// ============================================================
 // Competitions
 // ============================================================
 

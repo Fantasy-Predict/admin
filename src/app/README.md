@@ -145,7 +145,7 @@ Legend: ✅ **Integrated** (function exists in `_lib/api/` and a page calls it) 
 | Method & path | Summary | Status | Function / location |
 | --- | --- | --- | --- |
 | `POST /v1/admins` | Create admin — body `{ email*, password*, firstName?, lastName? }` | ✅ | `adminSignup()` → `_lib/api/` → used by `signup/page.tsx` |
-| `GET /v1/admins` | Fetch admins (query filters: `username`, `firstName`, `lastName`, `email`, `phoneNumber`) | ✅ | `getAdminUsers()` → `_lib/api/` → used by `users/page.tsx` |
+| `GET /v1/admins` | Fetch admins (query filters: `username`, `firstName`, `lastName`, `email`, `phoneNumber`) | ✅ | `getAdminUsers()` → `_lib/api/` (lists ADMIN accounts — no page uses it; the Users page shows players via `GET /v1/users`) |
 | `POST /v1/admins/verify-account` | Verify account — body `{ email*, otp* }` | ⚠️ | `adminVerifyAccount()` → `_lib/api/` → used by `signup/page.tsx` (live API returns 500) |
 | `POST /v1/admins/login` | Login — body `{ email*, password* }` | ✅ | `adminLogin()` → `_lib/api/` → used by `page.tsx` |
 | `GET /v1/admins/profile` | Current admin profile | ✅ | `getAdminProfile()` → `_lib/api/` |
@@ -173,8 +173,8 @@ Legend: ✅ **Integrated** (function exists in `_lib/api/` and a page calls it) 
 | `GET /v1/members` | Pool member search | ❌ | — |
 | `GET /v1/pool-members` / `POST` / `PATCH /v1/pool-members/{_id}` | Pool membership mgmt | ⚠️ | `joinPool`, `getPoolMembers`, `updatePoolMemberStatus` exist in player `endpoints.ts` |
 | `GET /v1/pool-members/count` | Membership counts | ❌ | — |
-| `GET /v1/users/count` | User count | ❌ | — |
-| `GET /v1/users` | Fetch users | ❌ | — |
+| `GET /v1/users/count` | User count | ❌ | — (requires BearerAuth; blocked by backend head-up #1) |
+| `GET /v1/users` | Fetch users (query: `username`, `firstName`, `lastName`, `email`, `phoneNumber`) | ✅ | `getUsers()` → `_lib/api/` → used by `users/page.tsx` (no auth needed) |
 | `GET /v1/feedbacks` | User feedback list | ⚠️ | only `submitFeedback` (POST) exists |
 | `GET /v1/competitions/news` | Competition news | ❌ | — |
 | `GET /v1/contest`, `POST /v1/contest`, `POST /v1/contest/join`, `GET /v1/contest/single/{_id}` | Contests | ❌ | — |

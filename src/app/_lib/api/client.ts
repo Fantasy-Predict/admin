@@ -71,8 +71,10 @@ export async function apiFetch<T>(path: string, options: ApiRequestOptions = {})
       if (!options._isRetry) {
         const rt = getRefreshToken();
         if (!rt) {
-          clearSession();
-          window.location.href = "/";
+          // No refresh token (e.g. admin sessions). Do NOT clear the session or
+          // bounce to the login page — surface the error so the page can render
+          // its fallback state. A hard redirect here makes the console log you
+          // out the moment a protected endpoint rejects the token.
           throw new ApiError(errorMessage(res.status, parsed), res.status, parsed);
         }
         try {

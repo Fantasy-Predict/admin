@@ -2,14 +2,8 @@
 > afantasy@0.1.0 start
 > next start -p 2041
 
-⨯ Failed to start server
-Error: listen EADDRINUSE: address already in use :::2041
-    at <unknown> (Error: listen EADDRINUSE: address already in use :::2041)
-    at new Promise (<anonymous>) {
-  code: 'EADDRINUSE',
-  errno: -4091,
-  syscall: 'listen',
-  address: '::',
-  port: 2041
-}
-
+▲ Next.js 16.3.4
+- Local:         http://localhost:2041
+- Network:       http://192.168.100.23:2041
+✓ Ready in 704ms
+✓ Running next.config.ts took 301ms
