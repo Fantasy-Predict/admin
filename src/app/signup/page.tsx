@@ -8,21 +8,18 @@ import { Logo } from "../_components/logo";
 import { Button } from "../_components/ui/button";
 import { Input } from "../_components/ui/input";
 import { Card } from "../_components/ui/card";
-import { adminSignup, adminVerifyAccount } from "../_lib/api";
+import { adminSignup } from "../_lib/api";
 
 export default function SignupPage() {
   const router = useRouter();
-  const [step, setStep] = useState<"create" | "done">("create");
+  const [created, setCreated] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const [otp, setOtp] = useState("");
-  const [creating, setCreating] = useState(false);
-  const [verifying, setVerifying] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  
   async function handleCreate(e: FormEvent) {
     e.preventDefault();
     if (!email || !password) {
@@ -33,7 +30,7 @@ export default function SignupPage() {
       toast.error("Passwords do not match");
       return;
     }
-    setCreating(true);
+    setLoading(true);
     try {
       await adminSignup({
         email,
@@ -42,34 +39,11 @@ export default function SignupPage() {
         lastName: lastName || undefined,
       });
       toast.success("Account created — you can sign in now");
-      setStep("done");
+      setCreated(true);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Sign up failed");
     } finally {
-      setCreating(false);
-    }
-  }
-
-  async function handleVerify(e: FormEvent) {
-    e.preventDefault();
-    if (!otp.trim()) {
-      toast.error("Please enter the OTP from your email");
-      return;
-    }
-    setVerifying(true);
-    try {
-      await adminVerifyAccount({ email, otp: otp.trim() });
-      toast.success("Account verified");
-      router.push("/");
-    } catch (err) {
-      toast.warning(
-        err instanceof Error && err.message
-          ? `${err.message} — your account is already active, so you can sign in directly.`
-          : "Verification is unavailable right now — your account is active, so you can sign in directly.",
-      );
-      router.push("/");
-    } finally {
-      setVerifying(false);
+      setLoading(false);
     }
   }
 
@@ -83,7 +57,22 @@ export default function SignupPage() {
           </p>
         </div>
 
-        {step === "create" ? (
+        {created ? (
+          <>
+            <h1 className="text-center text-xl font-bold">Account created</h1>
+            <p className="mt-1.5 text-center text-sm text-muted-foreground">
+              <span className="font-semibold text-foreground">{email}</span> is ready.
+              Your account is active — you can sign in with the password you set.
+            </p>
+            <Button
+              type="button"
+              onClick={() => router.push("/")}
+              className="mt-6 w-full"
+            >
+              Proceed to sign in
+            </Button>
+          </>
+        ) : (
           <>
             <h1 className="text-center text-xl font-bold">Create an account</h1>
             <p className="mt-1.5 text-center text-sm text-muted-foreground">
@@ -160,64 +149,22 @@ export default function SignupPage() {
                   required
                 />
               </div>
-              <Button type="submit" className="w-full" disabled={creating}>
-                {creating ? "Creating account…" : "Create account"}
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? "Creating account…" : "Create account"}
               </Button>
             </form>
-          </>
-        ) : (
-          <>
-            <h1 className="text-center text-xl font-bold">Account created</h1>
-            <p className="mt-1.5 text-center text-sm text-muted-foreground">
-              <span className="font-semibold text-foreground">{email}</span> is ready.
-              Your account is active now — you can sign in with the password you set.
-            </p>
-            <Button
-              type="button"
-              onClick={() => router.push("/")}
-              className="mt-6 w-full"
-            >
-              Proceed to sign in
-            </Button>
-
-            <div className="mt-6 border-t border-border pt-5">
-              <p className="text-sm font-medium">Verify your email (optional)</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                If you received a one-time code by email, you can enter it here. If you
-                didn&apos;t get one, just skip this — your account already works.
-              </p>
-              <form onSubmit={handleVerify} className="mt-3 space-y-3">
-                <Input
-                  id="otp"
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  placeholder="One-time code"
-                  value={otp}
-                  onChange={(e) => setOtp(e.target.value)}
-                />
-                <Button
-                  type="submit"
-                  variant="outline"
-                  className="w-full"
-                  disabled={verifying}
-                >
-                  {verifying ? "Verifying…" : "Verify code"}
-                </Button>
-              </form>
-            </div>
           </>
         )}
 
         <p className="mt-6 text-center text-sm text-muted-foreground">
-          {step === "create" ? (
+          {!created && (
             <>
               Already have an account?{" "}
               <Link href="/" className="font-semibold text-primary hover:underline">
                 Sign in
               </Link>
             </>
-          ) : null}
+          )}
         </p>
       </Card>
     </div>

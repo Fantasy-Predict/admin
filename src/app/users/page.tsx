@@ -7,12 +7,14 @@ import { Badge } from "../_components/ui/badge";
 import { Button } from "../_components/ui/button";
 import { Input } from "../_components/ui/input";
 import { formatNaira } from "../_lib/mock-data";
-import { getUsers, type PlatformUser } from "../_lib/api";
+import { getUsers, suspendUser, type PlatformUser } from "../_lib/api";
 
 export default function AdminUsers() {
   const [query, setQuery] = useState("");
   const [users, setUsers] = useState<PlatformUser[]>([]);
   const [loading, setLoading] = useState(true);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -35,8 +37,23 @@ export default function AdminUsers() {
     `${u.username} ${u.email} ${u.country}`.toLowerCase().includes(query.toLowerCase()),
   );
 
+  async function handleSuspend(user: PlatformUser) {
+    if (busyId) return;
+    setBusyId(user.id);
+    try {
+      await suspendUser(user.email);
+      toast.success(`${user.username} suspended`);
+      setUsers((prev) => prev.map((u) => (u.id === user.id ? { ...u, status: "suspended" } : u)));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to suspend user");
+    } finally {
+      setBusyId(null);
+      setConfirmId(null);
+    }
+  }
+
   return (
-    <AdminShell title="Users" description="Search accounts, review wallet balances and manage access.">
+    <AdminShell title="Users" description="Search player accounts, review wallet balances and suspend accounts.">
       <Input
         value={query}
         onChange={(e) => setQuery(e.target.value)}
@@ -73,17 +90,36 @@ export default function AdminUsers() {
                 </Badge>
               </td>
               <td className="px-5 py-3.5 text-right">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() =>
-                    toast.success(
-                      u.status === "suspended" ? `${u.username} reinstated` : `${u.username} suspended`,
-                    )
-                  }
-                >
-                  {u.status === "suspended" ? "Reinstate" : "Suspend"}
-                </Button>
+                {u.status === "suspended" ? (
+                  <span className="text-xs text-muted-foreground">Deleted</span>
+                ) : confirmId === u.id ? (
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setConfirmId(null)}
+                      disabled={busyId === u.id}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => handleSuspend(u)}
+                      disabled={busyId === u.id}
+                    >
+                      {busyId === u.id ? "Suspending…" : "Confirm"}
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setConfirmId(u.id)}
+                  >
+                    Suspend
+                  </Button>
+                )}
               </td>
             </tr>
           ))}

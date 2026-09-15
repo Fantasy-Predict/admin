@@ -34,8 +34,8 @@ export default function AdminPayments() {
   }, []);
 
   return (
-    <AdminShell title="Payments" description="Deposits settle automatically; withdrawals need manual approval.">
-      <div className="grid gap-5 sm:grid-cols-4">
+    <AdminShell title="Payments" description="All platform transactions — deposits and withdrawals. Withdrawals pay out immediately; nothing to approve.">
+      <div className="grid gap-5 sm:grid-cols-3">
         {loading ? (
           <>
             {Array.from({ length: 4 }).map((_, i) => (
@@ -49,8 +49,7 @@ export default function AdminPayments() {
           <>
             <StatCard label="Deposits this month" value={formatNaira(stats.depositsThisMonth)} hint="Settled" />
             <StatCard label="Withdrawals this month" value={formatNaira(stats.withdrawalsThisMonth)} accent="primary" hint="Paid to bank accounts" />
-            <StatCard label="Pending payouts" value={String(stats.pendingPayouts)} accent="gold" hint="Awaiting review" />
-            <StatCard label="Platform revenue" value={formatNaira(stats.platformRevenue)} accent="gold" hint="10% from monetized pools" />
+            <StatCard label="Platform revenue" value={formatNaira(stats.platformRevenue)} accent="gold" hint="From monetized pools" />
           </>
         )}
       </div>

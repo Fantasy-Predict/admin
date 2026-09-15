@@ -202,6 +202,20 @@ export async function getUsers(
   return list.map(toPlatformUser);
 }
 
+// Suspend (delete) a platform user — DELETE /v1/users/profile
+// Backend guidance (2026-09-14): suspension is implemented via this endpoint.
+// Per the OpenAPI spec it takes no documented body/params, so we send the target
+// user's email in the body as best-effort. Mechanism still unconfirmed — see the
+// open clarification to the backend ("how does the admin target which user?").
+// Requires the admin Bearer token (currently blocked by backend head-up #1).
+export async function suspendUser(email: string): Promise<unknown> {
+  return apiFetch<unknown>("/v1/users/profile", {
+    method: "DELETE",
+    token: getToken(),
+    body: { email },
+  });
+}
+
 // ============================================================
 // Competitions
 // ============================================================

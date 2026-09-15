@@ -29,24 +29,24 @@ repo; deploy this folder as its own project at **`admin.<domain>`** (e.g. `admin
 | Route | Page |
 | --- | --- |
 | `/` | Login / landing page (shown as the app's first screen) |
-| `/signup` | Create admin account + OTP verification |
+| `/signup` | Create admin account (active immediately, no OTP) |
 | `/overview` | Overview/dashboard (stats from `GET /v1/admins/dashboard`) |
-| `/users` | Users list (from `GET /v1/admins`) |
+| `/users` | Users list (from `GET /v1/users`) — read-only; suspend via `DELETE /v1/users/profile` |
 | `/pools` | Pools list (from `GET /v1/pools`) |
 | `/results` | Fixtures & results (from `GET /v1/matches` + `GET /v1/competitions`) |
-| `/payments` | Payments dashboard (from `GET /v1/admins/dashboard` + `GET /v1/transactions`) |
+| `/payments` | Payments dashboard (from `GET /v1/admins/dashboard` + `GET /v1/transactions`); withdrawals pay instantly, nothing to approve |
 
 ### Files & structure inside `src/app`
 
 | Path | Purpose |
 | --- | --- |
 | `page.tsx` | **Login / landing page** (`adminLogin()` + session bootstrap, then → `/overview`) |
-| `signup/page.tsx` | **Sign up** — create admin (`adminSignup()`) then verify OTP (`adminVerifyAccount()`) |
+| `signup/page.tsx` | **Sign up** — create admin (`adminSignup()`); account is active immediately, no OTP |
 | `fonts.ts` | `next/font/google` — Exo 2 (`--font-display`) + Montserrat (`--font-sans`) |
 | `layout.tsx` | Root layout: `ThemeProvider`, bootstrap script, `sonner` `<Toaster />` |
 | `globals.css` | Tailwind v3 theme tokens, CSS variables, `num`/`font-display` utilities |
 | `overview/page.tsx` | Overview/dashboard (stats from `GET /v1/admins/dashboard`) |
-| `users/page.tsx` | Users list (from `GET /v1/admins`) |
+| `users/page.tsx` | Users list (from `GET /v1/users`, no auth) + suspend → `DELETE /v1/users/profile` |
 | `pools/page.tsx` | Pools list (from `GET /v1/pools`) |
 | `results/page.tsx` | Fixtures & results (from `GET /v1/matches` + `GET /v1/competitions`) |
 | `payments/page.tsx` | Payments dashboard (from `GET /v1/admins/dashboard` + `GET /v1/transactions`) |
@@ -102,13 +102,9 @@ Endpoints are ordered per the OpenAPI docs: create → fetch → verify-account 
 - Sign up — `POST /v1/admins`, body `{ email*, password*, firstName?, lastName? }`.
   - Frontend: `adminSignup()` in `_lib/api/`, used by `src/app/signup/page.tsx`.
   - Response: `{ data: {}, status: true, message: "Account created successfully" }`.
-  - **Important:** on the live API the account is created with `isActive: true`
-    immediately — no OTP gate. The verify step is **optional/best-effort** and the
-    signup page never blocks sign-in on it.
-- Verify account (optional) — `POST /v1/admins/verify-account`, body `{ email*, otp* }`.
-  - Frontend: `adminVerifyAccount()` in `_lib/api/`.
-  - **Note:** this endpoint currently returns **HTTP 500** on the live API (backend
-    issue). The signup page catches that and still lets the admin proceed to sign in.
+  - The account is created with `isActive: true` immediately — **no OTP/verification**
+    (project decision: admins don't verify accounts). The signup page ends on a
+    "Proceed to sign in" success state.
 - Login — `POST /v1/admins/login`, body `{ email, password }`.
   - Response shape used by the app: `{ meta: { token, refreshToken }, data: { ... } }`.
   - Frontend: `adminLogin()` in `_lib/api/`, then the signing code in `src/app/page.tsx`
@@ -116,8 +112,35 @@ Endpoints are ordered per the OpenAPI docs: create → fetch → verify-account 
 - Current admin profile — `GET /v1/admins/profile` via `getAdminProfile()`;
   `DELETE /v1/admins/profile` via `deleteAdminProfile()` (both in `_lib/api/`).
 - All data calls send `Authorization: Bearer <fp_token>` (via `getToken()` from `_lib/api/session.ts`).
-- 401 handling: `apiFetch` tries to refresh via `POST /v1/users/refresh-token`, then
-  redirects to `/` (the `src/app/error.tsx` boundary also handles 401s).
+- 401 handling: `apiFetch` tries to refresh via `POST /v1/users/refresh-token`; on admin
+  sessions (no refresh token) it **throws the `ApiError`** to the page instead of clearing
+  the session / bouncing to `/`, so pages render their empty/error state without logging
+  the admin out. (`src/app/error.tsx` still handles 401s as a last resort.)
+
+---
+
+## Clarified v1 scope — backend decisions (2026-09-14)
+
+Admin scope confirmed by the backend team (mirror this when building/changing pages):
+
+1. **Pools** — read-only. Admin can only list pools and view their details. No member
+   removal, no closing — the platform has no harassment/cheat vector, and paid pools can't
+   be broken before resolution.
+2. **Payments** — read-only transactions. Users get their money **immediately**; there is
+   no pending/rejected state. `/payments` uses `GET /v1/transactions` for the list.
+3. **Predictions** — accepted immediately; nothing is "in review". Admin can fetch all
+   predictions (`GET /v1/predictions`) to **view only** — no changes. A prediction-review
+   screen is deferred.
+4. **Suspend users** — via `DELETE /v1/users/profile` (per backend). Wired as `suspendUser()`
+   but flagged ⚠️ pending two things: the admin token fix (head-up #1) and confirmation of
+   how the endpoint targets a specific user (it has no documented body/params, so we send
+   the target's email in the body as best-effort).
+5. **Notifications** — broadcast notifications to be added to the backend later; not v1.
+6. **Reports / exports (CSV)** — deferred by backend (cloud cost constraints); not v1.
+
+A single backend head-up still gates real data on every protected screen: the token issued
+by `POST /v1/admins/login` is rejected by the BearerAuth guard (401) on all admin data
+endpoints. Only `GET /v1/users` and `GET /v1/admins` are open today.
 - Logout calls `clearSession()` which wipes the token/user-type/pin keys and cookies.
 
 ---
@@ -146,7 +169,7 @@ Legend: ✅ **Integrated** (function exists in `_lib/api/` and a page calls it) 
 | --- | --- | --- | --- |
 | `POST /v1/admins` | Create admin — body `{ email*, password*, firstName?, lastName? }` | ✅ | `adminSignup()` → `_lib/api/` → used by `signup/page.tsx` |
 | `GET /v1/admins` | Fetch admins (query filters: `username`, `firstName`, `lastName`, `email`, `phoneNumber`) | ✅ | `getAdminUsers()` → `_lib/api/` (lists ADMIN accounts — no page uses it; the Users page shows players via `GET /v1/users`) |
-| `POST /v1/admins/verify-account` | Verify account — body `{ email*, otp* }` | ⚠️ | `adminVerifyAccount()` → `_lib/api/` → used by `signup/page.tsx` (live API returns 500) |
+| `POST /v1/admins/verify-account` | Verify account — body `{ email*, otp* }` | ❌ | `adminVerifyAccount()` kept in `_lib/api/` for reference; **not used in UI** (admins don't verify accounts; live API also returns 500) |
 | `POST /v1/admins/login` | Login — body `{ email*, password* }` | ✅ | `adminLogin()` → `_lib/api/` → used by `page.tsx` |
 | `GET /v1/admins/profile` | Current admin profile | ✅ | `getAdminProfile()` → `_lib/api/` |
 | `DELETE /v1/admins/profile` | Delete admin account | ✅ | `deleteAdminProfile()` → `_lib/api/` |
@@ -168,13 +191,15 @@ Legend: ✅ **Integrated** (function exists in `_lib/api/` and a page calls it) 
 | Method & path | Summary | Status | Notes |
 | --- | --- | --- | --- |
 | `POST /v1/settlements` | Run settlement | ❌ | Natural fit for `results` page ("Settle results" flow) |
-| `GET /v1/predictions/in-review` | Predictions awaiting review (`competition`, `poolId`, `fromDate`, `toDate`) | ❌ | — |
+| `GET /v1/predictions` | All predictions (query: `competition`, `pool`, `fromDate`, `toDate`) | ❌ | Read-only "prediction feed" screen for `results` — deferred (see scope decision #3) |
+| `GET /v1/predictions/in-review` | Predictions awaiting review | ❌ | **Out of v1 scope** — predictions are auto-accepted (decision #3) |
 | `POST /v1/predictions/send-mail` | Send result mails — body `{ matchday*, competition* }` | ❌ | — |
 | `GET /v1/members` | Pool member search | ❌ | — |
 | `GET /v1/pool-members` / `POST` / `PATCH /v1/pool-members/{_id}` | Pool membership mgmt | ⚠️ | `joinPool`, `getPoolMembers`, `updatePoolMemberStatus` exist in player `endpoints.ts` |
 | `GET /v1/pool-members/count` | Membership counts | ❌ | — |
 | `GET /v1/users/count` | User count | ❌ | — (requires BearerAuth; blocked by backend head-up #1) |
 | `GET /v1/users` | Fetch users (query: `username`, `firstName`, `lastName`, `email`, `phoneNumber`) | ✅ | `getUsers()` → `_lib/api/` → used by `users/page.tsx` (no auth needed) |
+| `DELETE /v1/users/profile` | Suspend (delete) a user — per backend decision #4 | ⚠️ | `suspendUser(email)` → `users/page.tsx` (needs admin token fix + targeting confirmation) |
 | `GET /v1/feedbacks` | User feedback list | ⚠️ | only `submitFeedback` (POST) exists |
 | `GET /v1/competitions/news` | Competition news | ❌ | — |
 | `GET /v1/contest`, `POST /v1/contest`, `POST /v1/contest/join`, `GET /v1/contest/single/{_id}` | Contests | ❌ | — |
