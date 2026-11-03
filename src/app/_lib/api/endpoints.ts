@@ -442,6 +442,87 @@ export async function getMatches(competition: string, date?: string): Promise<Ma
   }));
 }
 
+export async function getAdminMatches(competition: string): Promise<Match[]> {
+  const res = await apiFetch<unknown>(`/v1/admins/matches?competition=${encodeURIComponent(competition)}`, {
+    token: getToken(),
+    unwrap: false,
+  });
+
+  type AdminMatchDoc = {
+    _id?: string;
+    id?: string;
+    competition?: string | { _id?: string; name?: string };
+    matchday?: string;
+    homeTeam?: string | TeamObject;
+    awayTeam?: string | TeamObject;
+    home?: string | TeamObject;
+    away?: string | TeamObject;
+    home_team?: string | TeamObject;
+    away_team?: string | TeamObject;
+    homeShort?: string;
+    awayShort?: string;
+    home_short?: string;
+    away_short?: string;
+    kickoff?: string;
+    kickoffTime?: string;
+    kickoff_time?: string;
+    date?: string;
+    matchDate?: string;
+    status?: string;
+    state?: string;
+    score?: { home?: number; away?: number } | null;
+    homeScore?: number;
+    awayScore?: number;
+    matchId?: string;
+    stage?: string;
+    isActive?: boolean;
+  };
+
+  let list: AdminMatchDoc[] = [];
+  if (Array.isArray(res)) {
+    list = res as AdminMatchDoc[];
+  } else if (res && typeof res === "object") {
+    const r = res as Record<string, unknown>;
+    if (Array.isArray(r.data)) list = r.data as AdminMatchDoc[];
+    else if (Array.isArray(r.docs)) list = r.docs as AdminMatchDoc[];
+    else if (r.data && typeof r.data === "object" && Array.isArray((r.data as Record<string, unknown>).docs)) {
+      list = (r.data as Record<string, unknown>).docs as AdminMatchDoc[];
+    }
+  }
+
+  return list.map((m) => ({
+    id: m._id ?? m.id ?? "",
+    competition:
+      typeof m.competition === "object" && m.competition
+        ? m.competition.name ?? ""
+        : m.competition ?? "",
+    matchday: m.matchday ?? "",
+    home: extractTeamName(m.homeTeam ?? m.home ?? m.home_team, "Home"),
+    away: extractTeamName(m.awayTeam ?? m.away ?? m.away_team, "Away"),
+    homeShort: m.homeShort ?? m.home_short ?? extractTeamShort(m.homeTeam ?? m.home, "HOM"),
+    awayShort: m.awayShort ?? m.away_short ?? extractTeamShort(m.awayTeam ?? m.away, "AWY"),
+    homeCrest: (typeof m.homeTeam === "object" && m.homeTeam?.crest) || undefined,
+    awayCrest: (typeof m.awayTeam === "object" && m.awayTeam?.crest) || undefined,
+    kickoff: m.kickoff ?? m.kickoffTime ?? m.kickoff_time ?? m.date ?? m.matchDate ?? "",
+    status: ((): Match["status"] => {
+      const s = (m.status ?? m.state ?? "upcoming").toLowerCase();
+      if (s === "live" || s === "in-play" || s === "in_play" || s === "1h" || s === "2h" || s === "ht") return "live";
+      if (s === "finished" || s === "ft" || s === "complete" || s === "ended") return "finished";
+      return "upcoming";
+    })(),
+    score: m.score
+      ? { home: m.score.home ?? 0, away: m.score.away ?? 0 }
+      : m.homeScore !== undefined
+        ? { home: m.homeScore ?? 0, away: m.awayScore ?? 0 }
+        : (typeof m.homeTeam === "object" && m.homeTeam && "score" in m.homeTeam && typeof m.awayTeam === "object" && m.awayTeam && "score" in m.awayTeam)
+          ? {
+              home: (m.homeTeam as TeamObject & { score?: number }).score ?? 0,
+              away: (m.awayTeam as TeamObject & { score?: number }).score ?? 0,
+            }
+          : undefined,
+  }));
+}
+
 export type { TeamObject };
 
 // ============================================================

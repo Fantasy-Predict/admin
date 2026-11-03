@@ -8,7 +8,7 @@ import { Badge } from "../_components/ui/badge";
 import { Button } from "../_components/ui/button";
 import { Input } from "../_components/ui/input";
 import { Skeleton } from "../_components/ui/skeleton";
-import { getMatches, getUserCompetitions, settleMatch } from "../_lib/api";
+import { getAdminMatches, getUserCompetitions, settleMatch } from "../_lib/api";
 import type { Match } from "../_lib/mock-data";
 
 type RowStatus = "scheduled" | "awaiting result" | "settled";
@@ -25,7 +25,7 @@ export default function AdminResults() {
         const nameMap = new Map(comps.map((c) => [c._id, c.name]));
         const defaultComp = comps.find((c) => c.name === "Premier League" || c.code === "PL") ?? comps.find((c) => c.default) ?? comps[0];
         if (!defaultComp) return;
-        const data = await getMatches(defaultComp._id);
+        const data = await getAdminMatches(defaultComp._id);
         if (!active) return;
         setMatches(data.map((m) => ({
           ...m,
