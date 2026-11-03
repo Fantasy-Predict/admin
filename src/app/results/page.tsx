@@ -50,8 +50,14 @@ export default function AdminResults() {
 
         if (!active) return;
 
+        const cutoff = Date.now() - 60 * 24 * 60 * 60 * 1000; // 60 days ago
         const merged = perComp
           .flat()
+          .filter((m) => {
+            if (m.status !== "finished") return true;
+            const t = new Date(m.kickoff).getTime();
+            return isNaN(t) || t >= cutoff;
+          })
           .map((m) => ({
             ...m,
             competitionName: nameMap.get(m.competition) ?? m.competition,

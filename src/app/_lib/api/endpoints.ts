@@ -766,7 +766,7 @@ export async function getPools(
   if (options.privacy) params.set("privacy", options.privacy);
   if (options.personal) params.set("personal", "true");
   const qs = params.toString();
-  const res = await apiFetch<{ data?: PaginatedResponse<PoolDoc> } | PaginatedResponse<PoolDoc> | PoolDoc[]>(`/v1/pools?${qs}`, {
+  const res = await apiFetch<{ data?: PaginatedResponse<PoolDoc> } | PaginatedResponse<PoolDoc> | PoolDoc[]>(`/v1/admins/pools?${qs}`, {
     token: getToken(),
     unwrap: false,
   });
