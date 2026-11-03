@@ -60,13 +60,28 @@ export type AdminProfile = {
 
 export type AdminDashboard = {
   totalUsers: number;
-  activeUsers: number;
   totalPools: number;
-  predictionsThisWeek: number;
-  depositsThisMonth: number;
-  withdrawalsThisMonth: number;
-  pendingPayouts: number;
-  platformRevenue: number;
+  totalPredictions: number;
+  totalWalletBalance: number;
+  recentUsers: DashboardUser[];
+  recentWithdrawals: DashboardWithdrawal[];
+};
+
+export type DashboardUser = {
+  _id: string;
+  username: string;
+  name: string;
+  email: string;
+  countryCode: string;
+  isActive: boolean;
+  joined: string;
+};
+
+export type DashboardWithdrawal = {
+  _id: string;
+  amount: number;
+  status: string;
+  initiated: string;
 };
 
 // 1. Create admin — POST /v1/admins
@@ -131,10 +146,68 @@ export async function deleteAdminProfile(): Promise<unknown> {
 }
 
 // 7. Dashboard stats — GET /v1/admins/dashboard
+// Real response shape (2026-09-14): data { totalUser, totalPrediction,
+// totalPools, totalWallet: [{ totalBalance }], recentWithdrawals, recentUsers }.
 export async function getAdminDashboard(): Promise<AdminDashboard> {
-  return apiFetch<AdminDashboard>("/v1/admins/dashboard", {
+  type DashboardUserDoc = {
+    _id?: string;
+    username?: string;
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+    countryCode?: string;
+    isActive?: boolean;
+    createdAt?: string;
+  };
+  type DashboardWithdrawalDoc = {
+    _id?: string;
+    id?: string;
+    amount?: number;
+    status?: string;
+    createdAt?: string;
+    dateInitiated?: string;
+    date?: string;
+  };
+  type DashboardEnvelope = {
+    data?: {
+      totalUser?: number;
+      totalPools?: number;
+      totalPrediction?: number;
+      totalWallet?: { _id?: string | null; totalBalance?: number }[];
+      recentWithdrawals?: DashboardWithdrawalDoc[];
+      recentUsers?: DashboardUserDoc[];
+    };
+  };
+  const res = await apiFetch<DashboardEnvelope>("/v1/admins/dashboard", {
     token: getToken(),
+    unwrap: false,
   });
+  const d = res?.data ?? {};
+  const wallet =
+    Array.isArray(d.totalWallet) && d.totalWallet.length
+      ? (d.totalWallet[0].totalBalance ?? 0)
+      : 0;
+  return {
+    totalUsers: d.totalUser ?? 0,
+    totalPools: d.totalPools ?? 0,
+    totalPredictions: d.totalPrediction ?? 0,
+    totalWalletBalance: wallet,
+    recentUsers: (d.recentUsers ?? []).map((u) => ({
+      _id: u._id ?? "",
+      username: u.username ?? ([u.firstName, u.lastName].filter(Boolean).join(" ") || u.email || ""),
+      name: [u.firstName, u.lastName].filter(Boolean).join(" "),
+      email: u.email ?? "",
+      countryCode: u.countryCode ?? "",
+      isActive: u.isActive ?? true,
+      joined: formatUserDate(u.createdAt),
+    })),
+    recentWithdrawals: (d.recentWithdrawals ?? []).map((w) => ({
+      _id: w._id ?? w.id ?? "",
+      amount: w.amount ?? 0,
+      status: w.status ?? "",
+      initiated: formatTxDate(w.createdAt ?? w.dateInitiated ?? w.date ?? ""),
+    })),
+  };
 }
 
 // ============================================================
@@ -197,22 +270,25 @@ export async function getUsers(
   const qs = params.toString();
   const res = await apiFetch<{ docs?: PlatformUserDoc[] } | PlatformUserDoc[]>(
     `/v1/users${qs ? `?${qs}` : ""}`,
+    { token: getToken() }
   );
   const list = Array.isArray(res) ? res : (res?.docs ?? []);
   return list.map(toPlatformUser);
 }
 
-// Suspend (delete) a platform user — DELETE /v1/users/profile
-// Backend guidance (2026-09-14): suspension is implemented via this endpoint.
-// Per the OpenAPI spec it takes no documented body/params, so we send the target
-// user's email in the body as best-effort. Mechanism still unconfirmed — see the
-// open clarification to the backend ("how does the admin target which user?").
-// Requires the admin Bearer token (currently blocked by backend head-up #1).
-export async function suspendUser(email: string): Promise<unknown> {
-  return apiFetch<unknown>("/v1/users/profile", {
-    method: "DELETE",
+// Suspend a platform user — PATCH /v1/admins/users/:id/suspend
+export async function suspendUser(userId: string): Promise<unknown> {
+  return apiFetch<unknown>(`/v1/admins/users/${userId}/suspend`, {
+    method: "PATCH",
     token: getToken(),
-    body: { email },
+  });
+}
+
+// Unsuspend a platform user — PATCH /v1/admins/users/:id/unsuspend
+export async function unsuspendUser(userId: string): Promise<unknown> {
+  return apiFetch<unknown>(`/v1/admins/users/${userId}/unsuspend`, {
+    method: "PATCH",
+    token: getToken(),
   });
 }
 
@@ -413,6 +489,84 @@ export async function getTransactions(): Promise<Transaction[]> {
           : "failed",
     date: formatTxDate(tx.createdAt ?? tx.dateInitiated ?? tx.date ?? ""),
   }));
+}
+
+// All platform transactions (admin-scoped) — GET /v1/admins/transactions
+export async function getAdminTransactions(page = 1): Promise<Transaction[]> {
+  const res = await apiFetch<TransactionDoc[] | { docs?: TransactionDoc[] }>(
+    `/v1/admins/transactions?page=${page}`,
+    { token: getToken() }
+  );
+  const list = Array.isArray(res) ? res : (res?.docs ?? []);
+  return list.map((tx) => ({
+    id: tx._id ?? tx.id ?? "",
+    type:
+      tx.type === "debit" || tx.type === "Withdrawal"
+        ? "Withdrawal"
+        : tx.type === "credit" || tx.type === "Deposit"
+          ? "Deposit"
+          : tx.type ?? "Deposit",
+    amount: tx.amount ?? 0,
+    status:
+      tx.status === "success" || tx.status === "completed" || tx.status === "successful"
+        ? "successful"
+        : tx.status === "pending"
+          ? "pending"
+          : "failed",
+    date: formatTxDate(tx.createdAt ?? tx.dateInitiated ?? tx.date ?? ""),
+  }));
+}
+
+// ============================================================
+// Withdrawals (admin-scoped)
+// ============================================================
+
+export type AdminWithdrawal = {
+  id: string;
+  amount: number;
+  status: string;
+  date: string;
+  userEmail?: string;
+};
+
+type WithdrawalDoc = {
+  _id?: string;
+  id?: string;
+  amount?: number;
+  status?: string;
+  createdAt?: string;
+  dateInitiated?: string;
+  date?: string;
+  user?: string | { email?: string };
+};
+
+export async function getAdminWithdrawals(page = 1, status?: string): Promise<AdminWithdrawal[]> {
+  let path = `/v1/admins/withdrawals?page=${page}`;
+  if (status) path += `&status=${encodeURIComponent(status)}`;
+  const res = await apiFetch<WithdrawalDoc[] | { docs?: WithdrawalDoc[] }>(path, {
+    token: getToken(),
+  });
+  const list = Array.isArray(res) ? res : (res?.docs ?? []);
+  return list.map((w) => ({
+    id: w._id ?? w.id ?? "",
+    amount: w.amount ?? 0,
+    status: w.status ?? "pending",
+    date: formatTxDate(w.createdAt ?? w.dateInitiated ?? w.date ?? ""),
+    userEmail: typeof w.user === "object" ? w.user?.email : undefined,
+  }));
+}
+
+// Manually settle a match — POST /v1/admins/matches/:matchId/settle
+export async function settleMatch(
+  matchId: string,
+  homeScore: number,
+  awayScore: number
+): Promise<unknown> {
+  return apiFetch<unknown>(`/v1/admins/matches/${matchId}/settle`, {
+    method: "POST",
+    token: getToken(),
+    body: { homeScore, awayScore },
+  });
 }
 
 // ============================================================

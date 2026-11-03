@@ -4,61 +4,78 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { AdminShell, AdminTable } from "../_components/admin-shell";
 import { Badge } from "../_components/ui/badge";
-import { StatCard } from "../_components/stat-card";
 import { formatNaira, type Transaction } from "../_lib/mock-data";
-import { getAdminDashboard, getTransactions, type AdminDashboard } from "../_lib/api";
+import { getAdminTransactions, getAdminWithdrawals, type AdminWithdrawal } from "../_lib/api";
+
+type Tab = "transactions" | "withdrawals";
 
 export default function AdminPayments() {
-  const [stats, setStats] = useState<AdminDashboard | null>(null);
+  const [tab, setTab] = useState<Tab>("transactions");
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [withdrawals, setWithdrawals] = useState<AdminWithdrawal[]>([]);
+  const [txLoading, setTxLoading] = useState(true);
+  const [wdLoading, setWdLoading] = useState(false);
+  const [wdLoaded, setWdLoaded] = useState(false);
 
   useEffect(() => {
     let active = true;
-    async function load() {
-      try {
-        const [dash, txs] = await Promise.all([getAdminDashboard(), getTransactions()]);
-        if (!active) return;
-        setStats(dash);
-        setTransactions(txs);
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Unable to load payment data");
-      } finally {
-        if (active) setLoading(false);
-      }
-    }
-    load();
-    return () => {
-      active = false;
-    };
+    getAdminTransactions()
+      .then((data) => {
+        if (active) setTransactions(Array.isArray(data) ? data : []);
+      })
+      .catch((error) => {
+        toast.error(error instanceof Error ? error.message : "Unable to load transactions");
+      })
+      .finally(() => {
+        if (active) setTxLoading(false);
+      });
+    return () => { active = false; };
   }, []);
 
+  function handleTabChange(next: Tab) {
+    setTab(next);
+    if (next === "withdrawals" && !wdLoaded) {
+      setWdLoading(true);
+      let active = true;
+      getAdminWithdrawals()
+        .then((data) => {
+          if (active) setWithdrawals(Array.isArray(data) ? data : []);
+        })
+        .catch((error) => {
+          toast.error(error instanceof Error ? error.message : "Unable to load withdrawals");
+        })
+        .finally(() => {
+          if (active) {
+            setWdLoading(false);
+            setWdLoaded(true);
+          }
+        });
+    }
+  }
+
+  const tabCls = (t: Tab) =>
+    `px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+      tab === t
+        ? "border-primary text-primary"
+        : "border-transparent text-muted-foreground hover:text-foreground"
+    }`;
+
   return (
-    <AdminShell title="Payments" description="All platform transactions — deposits and withdrawals. Withdrawals pay out immediately; nothing to approve.">
-      <div className="grid gap-5 sm:grid-cols-3">
-        {loading ? (
-          <>
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="rounded-2xl border bg-card p-5 shadow-[var(--shadow-card)]">
-                <div className="h-3 w-24 animate-pulse rounded bg-muted" />
-                <div className="mt-4 h-7 w-20 animate-pulse rounded bg-muted" />
-              </div>
-            ))}
-          </>
-        ) : stats && (
-          <>
-            <StatCard label="Deposits this month" value={formatNaira(stats.depositsThisMonth)} hint="Settled" />
-            <StatCard label="Withdrawals this month" value={formatNaira(stats.withdrawalsThisMonth)} accent="primary" hint="Paid to bank accounts" />
-            <StatCard label="Platform revenue" value={formatNaira(stats.platformRevenue)} accent="gold" hint="From monetized pools" />
-          </>
-        )}
+    <AdminShell title="Payments" description="All platform transactions and withdrawal requests.">
+      {/* Tabs */}
+      <div className="flex gap-1 border-b border-border mb-6">
+        <button className={tabCls("transactions")} onClick={() => handleTabChange("transactions")}>
+          Transactions
+        </button>
+        <button className={tabCls("withdrawals")} onClick={() => handleTabChange("withdrawals")}>
+          Withdrawals
+        </button>
       </div>
 
-      {/* Recent transactions */}
-      <section className="mt-10">
-        <h2 className="text-lg font-semibold">Recent transactions</h2>
-        <div className="mt-4">
-          {loading ? (
+      {/* Transactions tab */}
+      {tab === "transactions" && (
+        <section>
+          {txLoading ? (
             <AdminTable columns={["Type", "Date", "Amount", "Status"]}>
               {Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i} className="border-b border-border last:border-0">
@@ -96,8 +113,50 @@ export default function AdminPayments() {
           ) : (
             <p className="text-sm text-muted-foreground">No transactions found.</p>
           )}
-        </div>
-      </section>
+        </section>
+      )}
+
+      {/* Withdrawals tab */}
+      {tab === "withdrawals" && (
+        <section>
+          {wdLoading ? (
+            <AdminTable columns={["Date", "Amount", "Status"]}>
+              {Array.from({ length: 5 }).map((_, i) => (
+                <tr key={i} className="border-b border-border last:border-0">
+                  <td className="px-5 py-3.5"><div className="h-4 w-24 animate-pulse rounded bg-muted" /></td>
+                  <td className="px-5 py-3.5"><div className="h-4 w-16 animate-pulse rounded bg-muted" /></td>
+                  <td className="px-5 py-3.5"><div className="h-5 w-16 animate-pulse rounded bg-muted" /></td>
+                </tr>
+              ))}
+            </AdminTable>
+          ) : withdrawals.length ? (
+            <AdminTable columns={["Date", "Amount", "Status"]}>
+              {withdrawals.map((w) => (
+                <tr key={w.id} className="border-b border-border last:border-0">
+                  <td className="px-5 py-3.5 text-muted-foreground">{w.date}</td>
+                  <td className="num px-5 py-3.5 font-semibold">{formatNaira(w.amount)}</td>
+                  <td className="px-5 py-3.5">
+                    <Badge
+                      variant="outline"
+                      className={
+                        w.status === "success" || w.status === "completed"
+                          ? "border-success/40 text-success"
+                          : w.status === "pending"
+                            ? "border-gold/50 text-gold"
+                            : "border-destructive/40 text-destructive"
+                      }
+                    >
+                      {w.status}
+                    </Badge>
+                  </td>
+                </tr>
+              ))}
+            </AdminTable>
+          ) : (
+            <p className="text-sm text-muted-foreground">No withdrawals found.</p>
+          )}
+        </section>
+      )}
     </AdminShell>
   );
 }

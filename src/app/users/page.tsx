@@ -7,7 +7,7 @@ import { Badge } from "../_components/ui/badge";
 import { Button } from "../_components/ui/button";
 import { Input } from "../_components/ui/input";
 import { formatNaira } from "../_lib/mock-data";
-import { getUsers, suspendUser, type PlatformUser } from "../_lib/api";
+import { getUsers, suspendUser, unsuspendUser, type PlatformUser } from "../_lib/api";
 
 export default function AdminUsers() {
   const [query, setQuery] = useState("");
@@ -15,6 +15,7 @@ export default function AdminUsers() {
   const [loading, setLoading] = useState(true);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [unsuspendConfirmId, setUnsuspendConfirmId] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -41,7 +42,7 @@ export default function AdminUsers() {
     if (busyId) return;
     setBusyId(user.id);
     try {
-      await suspendUser(user.email);
+      await suspendUser(user.id);
       toast.success(`${user.username} suspended`);
       setUsers((prev) => prev.map((u) => (u.id === user.id ? { ...u, status: "suspended" } : u)));
     } catch (error) {
@@ -49,6 +50,21 @@ export default function AdminUsers() {
     } finally {
       setBusyId(null);
       setConfirmId(null);
+    }
+  }
+
+  async function handleUnsuspend(user: PlatformUser) {
+    if (busyId) return;
+    setBusyId(user.id);
+    try {
+      await unsuspendUser(user.id);
+      toast.success(`${user.username} unsuspended`);
+      setUsers((prev) => prev.map((u) => (u.id === user.id ? { ...u, status: "active" } : u)));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to unsuspend user");
+    } finally {
+      setBusyId(null);
+      setUnsuspendConfirmId(null);
     }
   }
 
@@ -91,7 +107,35 @@ export default function AdminUsers() {
               </td>
               <td className="px-5 py-3.5 text-right">
                 {u.status === "suspended" ? (
-                  <span className="text-xs text-muted-foreground">Deleted</span>
+                  unsuspendConfirmId === u.id ? (
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setUnsuspendConfirmId(null)}
+                        disabled={busyId === u.id}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => handleUnsuspend(u)}
+                        disabled={busyId === u.id}
+                        className="bg-success text-white hover:bg-success/90"
+                      >
+                        {busyId === u.id ? "Unsuspending…" : "Confirm"}
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setUnsuspendConfirmId(u.id)}
+                      className="border-success/40 text-success hover:text-success"
+                    >
+                      Unsuspend
+                    </Button>
+                  )
                 ) : confirmId === u.id ? (
                   <div className="flex justify-end gap-2">
                     <Button
