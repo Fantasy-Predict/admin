@@ -750,6 +750,13 @@ export async function closePool(poolId: string): Promise<void> {
   });
 }
 
+export async function reopenPool(poolId: string): Promise<void> {
+  await apiFetch(`/v1/admins/pools/${poolId}/reopen`, {
+    method: "PATCH",
+    token: getToken(),
+  });
+}
+
 export async function getPools(
   options: { page?: number; name?: string; privacy?: string; personal?: boolean } = {},
 ): Promise<Pool[]> {

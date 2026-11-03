@@ -7,7 +7,7 @@ import { Badge } from "../_components/ui/badge";
 import { Button } from "../_components/ui/button";
 import { Skeleton } from "../_components/ui/skeleton";
 import { formatNaira } from "../_lib/mock-data";
-import { getPools, closePool, type Pool } from "../_lib/api";
+import { getPools, closePool, reopenPool, type Pool } from "../_lib/api";
 import { cn } from "../_lib/utils";
 
 export default function AdminPools() {
@@ -15,6 +15,7 @@ export default function AdminPools() {
   const [loading, setLoading] = useState(true);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [closing, setClosing] = useState<string | null>(null);
+  const [reopening, setReopening] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -26,6 +27,19 @@ export default function AdminPools() {
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, []);
+
+  async function handleReopen(poolId: string) {
+    setReopening(poolId);
+    try {
+      await reopenPool(poolId);
+      setPools((prev) => prev.map((p) => p.id === poolId ? { ...p, isActive: true } : p));
+      toast.success("Pool reopened successfully");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to reopen pool");
+    } finally {
+      setReopening(null);
+    }
+  }
 
   async function handleClose(poolId: string) {
     setClosing(poolId);
@@ -66,6 +80,7 @@ export default function AdminPools() {
               const isClosed = l.isActive === false;
               const isConfirming = confirmId === l.id;
               const isClosing = closing === l.id;
+              const isReopening = reopening === l.id;
 
               return (
                 <tr key={l.id} className="border-b border-border last:border-0">
@@ -100,7 +115,14 @@ export default function AdminPools() {
                   <td className="num px-5 py-3.5">{l.players}/{l.maxPlayers}</td>
                   <td className="px-5 py-3.5">
                     {isClosed ? (
-                      <span className="text-xs text-muted-foreground">—</span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={isReopening}
+                        onClick={() => handleReopen(l.id)}
+                      >
+                        {isReopening ? "Reopening…" : "Reopen"}
+                      </Button>
                     ) : isConfirming ? (
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-muted-foreground">Close this pool?</span>
