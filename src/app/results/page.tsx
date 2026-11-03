@@ -10,6 +10,7 @@ import { Input } from "../_components/ui/input";
 import { Skeleton } from "../_components/ui/skeleton";
 import { getAdminMatches, getUserCompetitions, settleMatch } from "../_lib/api";
 import type { Match } from "../_lib/mock-data";
+import type { UserCompetition } from "../_lib/api";
 
 type RowStatus = "scheduled" | "awaiting result" | "settled";
 
@@ -29,25 +30,27 @@ function formatKickoff(raw: string): string {
 }
 
 export default function AdminResults() {
-  const [matches, setMatches] = useState<Match[]>([]);
+  const [allMatches, setAllMatches] = useState<Match[]>([]);
+  const [comps, setComps] = useState<UserCompetition[]>([]);
+  const [selectedComp, setSelectedComp] = useState<string>("all");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
     async function load() {
       try {
-        const comps = await getUserCompetitions().catch(() => []);
-        if (!comps.length) return;
+        const fetchedComps = await getUserCompetitions().catch(() => []);
+        if (!fetchedComps.length) return;
 
-        const nameMap = new Map(comps.map((c) => [c._id, c.name]));
+        const nameMap = new Map(fetchedComps.map((c) => [c._id, c.name]));
 
         const perComp = await Promise.all(
-          comps.map((c) => getAdminMatches(c._id).catch(() => []))
+          fetchedComps.map((c) => getAdminMatches(c._id).catch(() => []))
         );
 
         if (!active) return;
 
-        const all = perComp
+        const merged = perComp
           .flat()
           .map((m) => ({
             ...m,
@@ -55,7 +58,8 @@ export default function AdminResults() {
           }))
           .sort((a, b) => new Date(a.kickoff).getTime() - new Date(b.kickoff).getTime());
 
-        setMatches(all);
+        setComps(fetchedComps);
+        setAllMatches(merged);
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Unable to load fixtures");
       } finally {
@@ -67,7 +71,7 @@ export default function AdminResults() {
   }, []);
 
   function onSettled(matchId: string, homeScore: number, awayScore: number) {
-    setMatches((prev) =>
+    setAllMatches((prev) =>
       prev.map((m) =>
         m.id === matchId
           ? { ...m, status: "finished" as Match["status"], score: { home: homeScore, away: awayScore } }
@@ -76,11 +80,34 @@ export default function AdminResults() {
     );
   }
 
+  const visible =
+    selectedComp === "all"
+      ? allMatches
+      : allMatches.filter((m) => m.competition === selectedComp || m.competitionName === comps.find((c) => c._id === selectedComp)?.name);
+
   return (
     <AdminShell
       title="Fixtures & results"
       description="View match fixtures and manually settle results if needed."
     >
+      {/* Competition filter */}
+      {!loading && comps.length > 0 && (
+        <div className="mb-6">
+          <select
+            value={selectedComp}
+            onChange={(e) => setSelectedComp(e.target.value)}
+            className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+          >
+            <option value="all">All competitions</option>
+            {comps.map((c) => (
+              <option key={c._id} value={c._id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
       <div className="grid gap-4">
         {loading
           ? Array.from({ length: 6 }).map((_, index) => (
@@ -94,13 +121,13 @@ export default function AdminResults() {
                 </div>
               </Card>
             ))
-          : matches.length === 0
+          : visible.length === 0
             ? (
               <Card className="gap-0 p-8 text-center shadow-[var(--shadow-card)]">
                 <p className="text-sm text-muted-foreground">No fixtures found.</p>
               </Card>
             )
-            : matches.map((match) => (
+            : visible.map((match) => (
               <ResultRow key={match.id} match={match} onSettled={onSettled} />
             ))}
       </div>
