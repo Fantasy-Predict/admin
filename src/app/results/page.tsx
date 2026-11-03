@@ -50,7 +50,7 @@ export default function AdminResults() {
 
         if (!active) return;
 
-        const cutoff = Date.now() - 60 * 24 * 60 * 60 * 1000; // 60 days ago
+        const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000; // 30 days ago
         const merged = perComp
           .flat()
           .filter((m) => {
