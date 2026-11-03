@@ -13,6 +13,21 @@ import type { Match } from "../_lib/mock-data";
 
 type RowStatus = "scheduled" | "awaiting result" | "settled";
 
+function formatKickoff(raw: string): string {
+  if (!raw) return "—";
+  const d = new Date(raw);
+  if (isNaN(d.getTime())) return raw;
+  return d.toLocaleString("en-GB", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Africa/Lagos",
+  });
+}
+
 export default function AdminResults() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
@@ -22,15 +37,25 @@ export default function AdminResults() {
     async function load() {
       try {
         const comps = await getUserCompetitions().catch(() => []);
+        if (!comps.length) return;
+
         const nameMap = new Map(comps.map((c) => [c._id, c.name]));
-        const defaultComp = comps.find((c) => c.name === "Premier League" || c.code === "PL") ?? comps.find((c) => c.default) ?? comps[0];
-        if (!defaultComp) return;
-        const data = await getAdminMatches(defaultComp._id);
+
+        const perComp = await Promise.all(
+          comps.map((c) => getAdminMatches(c._id).catch(() => []))
+        );
+
         if (!active) return;
-        setMatches(data.map((m) => ({
-          ...m,
-          competitionName: nameMap.get(m.competition) ?? m.competition,
-        })));
+
+        const all = perComp
+          .flat()
+          .map((m) => ({
+            ...m,
+            competitionName: nameMap.get(m.competition) ?? m.competition,
+          }))
+          .sort((a, b) => new Date(a.kickoff).getTime() - new Date(b.kickoff).getTime());
+
+        setMatches(all);
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Unable to load fixtures");
       } finally {
@@ -58,7 +83,7 @@ export default function AdminResults() {
     >
       <div className="grid gap-4">
         {loading
-          ? Array.from({ length: 4 }).map((_, index) => (
+          ? Array.from({ length: 6 }).map((_, index) => (
               <Card key={index} className="gap-0 p-5 shadow-[var(--shadow-card)]">
                 <Skeleton className="h-4 w-48" />
                 <Skeleton className="mt-2 h-3 w-24" />
@@ -69,7 +94,13 @@ export default function AdminResults() {
                 </div>
               </Card>
             ))
-          : matches.map((match) => (
+          : matches.length === 0
+            ? (
+              <Card className="gap-0 p-8 text-center shadow-[var(--shadow-card)]">
+                <p className="text-sm text-muted-foreground">No fixtures found.</p>
+              </Card>
+            )
+            : matches.map((match) => (
               <ResultRow key={match.id} match={match} onSettled={onSettled} />
             ))}
       </div>
@@ -118,7 +149,10 @@ function ResultRow({
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <p className="text-sm font-semibold">{`${match.home} vs ${match.away}`}</p>
-          <p className="mt-1 text-xs text-muted-foreground">{`${match.competitionName ?? match.competition} · ${match.kickoff}`}</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {match.competitionName ?? match.competition}
+            {match.kickoff ? ` · ${formatKickoff(match.kickoff)}` : ""}
+          </p>
         </div>
         <div className="flex items-center gap-3">
           <Badge
