@@ -805,7 +805,7 @@ export async function getAdminPoolMembers(poolId: string): Promise<PoolMember[]>
     return {
       id: m._id ?? m.id ?? "",
       userId,
-      name: [firstName, lastName].filter(Boolean).join(" ") || (u as { username?: string }).username ?? "Unknown",
+      name: [firstName, lastName].filter(Boolean).join(" ") || ((u as { username?: string }).username ?? "Unknown"),
       email: (u as { email?: string }).email ?? "",
       username: (u as { username?: string }).username ?? "",
       role: (m.type === "captain" ? "captain" : "player") as PoolMember["role"],
