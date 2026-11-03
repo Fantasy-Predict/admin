@@ -727,6 +727,7 @@ function normalizePool(pool: PoolDoc | Pool, opts?: { mine?: boolean }): Pool {
     createdBy: creatorId,
     isCreator: p.isCreator,
     inviteCode: p.config?.code,
+    isActive: p.isActive !== false,
   };
 }
 
@@ -741,6 +742,13 @@ type PaginatedResponse<T> = {
   hasNextPage?: boolean;
   hasMore?: boolean;
 };
+
+export async function closePool(poolId: string): Promise<void> {
+  await apiFetch(`/v1/admins/pools/${poolId}/close`, {
+    method: "PATCH",
+    token: getToken(),
+  });
+}
 
 export async function getPools(
   options: { page?: number; name?: string; privacy?: string; personal?: boolean } = {},

@@ -35,6 +35,7 @@ export type Pool = {
   createdBy?: string;
   isCreator?: boolean;
   inviteCode?: string;
+  isActive?: boolean;
 };
 
 export type Transaction = {
