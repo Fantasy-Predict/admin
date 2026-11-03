@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { AdminShell, AdminTable } from "../_components/admin-shell";
 import { Badge } from "../_components/ui/badge";
@@ -85,7 +86,7 @@ export default function AdminPools() {
               return (
                 <tr key={l.id} className="border-b border-border last:border-0">
                   <td className="px-5 py-3.5">
-                    <p className="font-semibold">{l.name}</p>
+                    <Link href={`/pools/${l.id}`} className="font-semibold hover:underline">{l.name}</Link>
                     <div className="mt-1 flex items-center gap-1.5">
                       <Badge variant="outline" className="text-[10px] capitalize">
                         {l.privacy}

@@ -743,6 +743,79 @@ type PaginatedResponse<T> = {
   hasMore?: boolean;
 };
 
+export type PoolMember = {
+  id: string;
+  userId: string;
+  name: string;
+  email: string;
+  username: string;
+  role: "captain" | "player";
+  status: "approved" | "pending" | "declined";
+  amountSpent: number;
+  joined: string;
+};
+
+type PoolMemberDoc = {
+  _id?: string;
+  id?: string;
+  pool?: string;
+  user?: {
+    _id?: string;
+    firstName?: string;
+    lastName?: string;
+    username?: string;
+    email?: string;
+    isActive?: boolean;
+    createdAt?: string;
+  } | string;
+  type?: string;
+  status?: string;
+  totalAmountSpent?: number;
+  createdAt?: string;
+};
+
+export async function getAdminPool(poolId: string): Promise<Pool> {
+  const res = await apiFetch<unknown>(`/v1/admins/pools/${poolId}`, {
+    token: getToken(),
+    unwrap: false,
+  });
+  type Envelope = { data?: PoolDoc };
+  const doc = ((res as Envelope)?.data ?? res) as PoolDoc;
+  return normalizePool(doc);
+}
+
+export async function getAdminPoolMembers(poolId: string): Promise<PoolMember[]> {
+  const res = await apiFetch<unknown>(`/v1/admins/pools/${poolId}/members`, {
+    token: getToken(),
+    unwrap: false,
+  });
+  type Envelope = { data?: { docs?: PoolMemberDoc[] } | PoolMemberDoc[]; docs?: PoolMemberDoc[] };
+  const r = res as Envelope;
+  let list: PoolMemberDoc[] = [];
+  if (Array.isArray(r)) list = r as PoolMemberDoc[];
+  else if (Array.isArray(r?.data)) list = r.data as PoolMemberDoc[];
+  else if (r?.data && !Array.isArray(r.data) && Array.isArray((r.data as { docs?: PoolMemberDoc[] }).docs)) list = (r.data as { docs: PoolMemberDoc[] }).docs;
+  else if (Array.isArray(r?.docs)) list = r.docs!;
+
+  return list.map((m) => {
+    const u = typeof m.user === "object" && m.user ? m.user : {};
+    const firstName = (u as { firstName?: string }).firstName ?? "";
+    const lastName = (u as { lastName?: string }).lastName ?? "";
+    const userId = (u as { _id?: string })._id ?? (typeof m.user === "string" ? m.user : "");
+    return {
+      id: m._id ?? m.id ?? "",
+      userId,
+      name: [firstName, lastName].filter(Boolean).join(" ") || (u as { username?: string }).username ?? "Unknown",
+      email: (u as { email?: string }).email ?? "",
+      username: (u as { username?: string }).username ?? "",
+      role: (m.type === "captain" ? "captain" : "player") as PoolMember["role"],
+      status: (["approved", "pending", "declined"].includes(m.status ?? "") ? m.status : "approved") as PoolMember["status"],
+      amountSpent: m.totalAmountSpent ?? 0,
+      joined: formatUserDate(m.createdAt),
+    };
+  });
+}
+
 export async function closePool(poolId: string): Promise<void> {
   await apiFetch(`/v1/admins/pools/${poolId}/close`, {
     method: "PATCH",
