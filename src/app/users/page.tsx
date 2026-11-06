@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { AdminShell, AdminTable } from "../_components/admin-shell";
 import { Badge } from "../_components/ui/badge";
@@ -38,7 +39,7 @@ function WalletModal({
     return () => { active = false; };
   }, [user.id]);
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
@@ -106,7 +107,8 @@ function WalletModal({
           )}
         </div>
       </Card>
-    </div>
+    </div>,
+    document.body
   );
 }
 
