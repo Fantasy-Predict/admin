@@ -73,6 +73,12 @@ function MonthlyBreakdownTable({ rows }: { rows: MonthlyBreakdown[] }) {
   );
 }
 
+function getCurrentMonthStats(monthly: MonthlyBreakdown[]) {
+  const now = new Date();
+  const row = monthly.find((r) => r.year === now.getFullYear() && r.month === now.getMonth() + 1);
+  return { inflow: row?.inflow ?? 0, outflow: row?.outflow ?? 0 };
+}
+
 export default function AdminOverview() {
   const [stats, setStats] = useState<AdminDashboard>(EMPTY_DASHBOARD);
   const [walletStats, setWalletStats] = useState<WalletStats>(EMPTY_WALLET);
@@ -145,23 +151,29 @@ export default function AdminOverview() {
                 </Button>
               </div>
 
-              <div className="mt-5 grid gap-4 sm:grid-cols-3">
-                <div className="rounded-lg border border-border bg-muted/30 p-4">
-                  <p className="text-xs text-muted-foreground">Total Inflow</p>
-                  <p className="num mt-1 text-xl font-bold text-success">{formatNaira(walletStats.totalInflow)}</p>
-                  <p className="mt-0.5 text-[11px] text-muted-foreground">All-time deposits</p>
-                </div>
-                <div className="rounded-lg border border-border bg-muted/30 p-4">
-                  <p className="text-xs text-muted-foreground">Total Outflow</p>
-                  <p className="num mt-1 text-xl font-bold text-destructive">{formatNaira(walletStats.totalOutflow)}</p>
-                  <p className="mt-0.5 text-[11px] text-muted-foreground">All-time withdrawals &amp; debits</p>
-                </div>
-                <div className="rounded-lg border border-border bg-muted/30 p-4">
-                  <p className="text-xs text-muted-foreground">Current Balance</p>
-                  <p className="num mt-1 text-xl font-bold">{formatNaira(walletStats.currentBalance)}</p>
-                  <p className="mt-0.5 text-[11px] text-muted-foreground">Across all player wallets</p>
-                </div>
-              </div>
+              {(() => {
+                const thisMonth = getCurrentMonthStats(walletStats.monthly);
+                const monthLabel = `${MONTH_NAMES[new Date().getMonth()]} ${new Date().getFullYear()}`;
+                return (
+                  <div className="mt-5 grid gap-4 sm:grid-cols-3">
+                    <div className="rounded-lg border border-border bg-muted/30 p-4">
+                      <p className="text-xs text-muted-foreground">Total Inflow</p>
+                      <p className="num mt-1 text-xl font-bold text-success">{formatNaira(thisMonth.inflow)}</p>
+                      <p className="mt-0.5 text-[11px] text-muted-foreground">{monthLabel} deposits</p>
+                    </div>
+                    <div className="rounded-lg border border-border bg-muted/30 p-4">
+                      <p className="text-xs text-muted-foreground">Total Outflow</p>
+                      <p className="num mt-1 text-xl font-bold text-destructive">{formatNaira(thisMonth.outflow)}</p>
+                      <p className="mt-0.5 text-[11px] text-muted-foreground">{monthLabel} withdrawals &amp; debits</p>
+                    </div>
+                    <div className="rounded-lg border border-border bg-muted/30 p-4">
+                      <p className="text-xs text-muted-foreground">Current Balance</p>
+                      <p className="num mt-1 text-xl font-bold">{formatNaira(walletStats.currentBalance)}</p>
+                      <p className="mt-0.5 text-[11px] text-muted-foreground">Across all player wallets</p>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {showBreakdown && (
                 <div className="mt-6 border-t border-border pt-5">
