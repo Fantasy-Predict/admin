@@ -7,14 +7,7 @@ import { Logo } from "./_components/logo";
 import { Button } from "./_components/ui/button";
 import { Input } from "./_components/ui/input";
 import { Card } from "./_components/ui/card";
-import {
-  adminLogin,
-  setToken,
-  setRefreshToken,
-  setStoredUserType,
-  recordLoginTime,
-  setSessionCookies,
-} from "./_lib/api";
+import { adminLogin } from "./_lib/api";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -30,20 +23,9 @@ export default function LoginPage() {
     }
     setLoading(true);
     try {
-      const res = await adminLogin({ email, password });
-      if (res.token) {
-        setToken(res.token);
-        recordLoginTime();
-        setSessionCookies(res.token, "admin");
-        setStoredUserType("admin");
-        if (res.refreshToken) {
-          setRefreshToken(res.refreshToken);
-        }
-        toast.success("Logged in successfully");
-        router.push("/overview");
-      } else {
-        toast.error("Login failed — no token received");
-      }
+      await adminLogin({ email, password });
+      toast.success("Logged in successfully");
+      router.push("/overview");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Login failed");
     } finally {
