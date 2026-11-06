@@ -61,10 +61,34 @@ export type AdminProfile = {
 export type AdminDashboard = {
   totalUsers: number;
   totalPools: number;
-  totalPredictions: number;
+  freePools: number;
+  monetizedPools: number;
   totalWalletBalance: number;
+  totalInflow: number;
+  totalOutflow: number;
   recentUsers: DashboardUser[];
   recentWithdrawals: DashboardWithdrawal[];
+};
+
+export type MonthlyBreakdown = {
+  year: number;
+  month: number;
+  inflow: number;
+  outflow: number;
+};
+
+export type WalletStats = {
+  totalInflow: number;
+  totalOutflow: number;
+  currentBalance: number;
+  monthly: MonthlyBreakdown[];
+};
+
+export type UserWalletStats = {
+  balance: number;
+  totalInflow: number;
+  totalOutflow: number;
+  monthly: MonthlyBreakdown[];
 };
 
 export type DashboardUser = {
@@ -172,7 +196,10 @@ export async function getAdminDashboard(): Promise<AdminDashboard> {
     data?: {
       totalUser?: number;
       totalPools?: number;
-      totalPrediction?: number;
+      freePools?: number;
+      monetizedPools?: number;
+      totalInflow?: number;
+      totalOutflow?: number;
       totalWallet?: { _id?: string | null; totalBalance?: number }[];
       recentWithdrawals?: DashboardWithdrawalDoc[];
       recentUsers?: DashboardUserDoc[];
@@ -190,7 +217,10 @@ export async function getAdminDashboard(): Promise<AdminDashboard> {
   return {
     totalUsers: d.totalUser ?? 0,
     totalPools: d.totalPools ?? 0,
-    totalPredictions: d.totalPrediction ?? 0,
+    freePools: d.freePools ?? 0,
+    monetizedPools: d.monetizedPools ?? 0,
+    totalInflow: d.totalInflow ?? 0,
+    totalOutflow: d.totalOutflow ?? 0,
     totalWalletBalance: wallet,
     recentUsers: (d.recentUsers ?? []).map((u) => ({
       _id: u._id ?? "",
@@ -828,6 +858,34 @@ export async function reopenPool(poolId: string): Promise<void> {
     method: "PATCH",
     token: getToken(),
   });
+}
+
+export async function getAdminWalletStats(): Promise<WalletStats> {
+  type Envelope = { data?: { totalInflow?: number; totalOutflow?: number; currentBalance?: number; monthly?: MonthlyBreakdown[] } };
+  const res = await apiFetch<Envelope>("/v1/admins/wallet/stats", { token: getToken(), unwrap: false });
+  const d = (res as Envelope)?.data ?? {};
+  return {
+    totalInflow: d.totalInflow ?? 0,
+    totalOutflow: d.totalOutflow ?? 0,
+    currentBalance: d.currentBalance ?? 0,
+    monthly: d.monthly ?? [],
+  };
+}
+
+export async function getUserWalletStats(userId: string): Promise<UserWalletStats> {
+  type Envelope = { data?: { balance?: number; totalInflow?: number; totalOutflow?: number; monthly?: MonthlyBreakdown[] } };
+  const res = await apiFetch<Envelope>(`/v1/admins/users/${userId}/wallet`, { token: getToken(), unwrap: false });
+  const d = (res as Envelope)?.data ?? {};
+  return {
+    balance: d.balance ?? 0,
+    totalInflow: d.totalInflow ?? 0,
+    totalOutflow: d.totalOutflow ?? 0,
+    monthly: d.monthly ?? [],
+  };
+}
+
+export async function resetUserWalletBalance(userId: string): Promise<void> {
+  await apiFetch(`/v1/admins/users/${userId}/wallet/reset`, { method: "POST", token: getToken() });
 }
 
 export async function getPools(
