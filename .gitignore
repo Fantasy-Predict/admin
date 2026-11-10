@@ -40,3 +40,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# Claude Code context file — local only, never push
+CLAUDE.md
+

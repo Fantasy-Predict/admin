@@ -12,9 +12,11 @@ import { formatNaira } from "../_lib/mock-data";
 import {
   getAdminDashboard,
   getAdminWalletStats,
+  getFplAdminStats,
   type AdminDashboard,
   type WalletStats,
   type MonthlyBreakdown,
+  type FplAdminStats,
 } from "../_lib/api";
 
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -73,19 +75,28 @@ function MonthlyBreakdownTable({ rows }: { rows: MonthlyBreakdown[] }) {
   );
 }
 
+const EMPTY_FPL: FplAdminStats = {
+  totalFplTeams: 0,
+  totalFplLeagues: 0,
+  currentGwNumber: null,
+  currentGwAvgScore: null,
+};
+
 export default function AdminOverview() {
   const [stats, setStats] = useState<AdminDashboard>(EMPTY_DASHBOARD);
   const [walletStats, setWalletStats] = useState<WalletStats>(EMPTY_WALLET);
+  const [fplStats, setFplStats] = useState<FplAdminStats>(EMPTY_FPL);
   const [loading, setLoading] = useState(true);
   const [showBreakdown, setShowBreakdown] = useState(false);
 
   useEffect(() => {
     let active = true;
-    Promise.all([getAdminDashboard(), getAdminWalletStats()])
-      .then(([dash, wallet]) => {
+    Promise.all([getAdminDashboard(), getAdminWalletStats(), getFplAdminStats()])
+      .then(([dash, wallet, fpl]) => {
         if (!active) return;
         if (dash) setStats(dash);
         if (wallet) setWalletStats(wallet);
+        if (fpl) setFplStats(fpl);
       })
       .catch((error) => {
         toast.error(error instanceof Error ? error.message : "Unable to load the dashboard");
@@ -129,6 +140,39 @@ export default function AdminOverview() {
               accent="gold"
               hint="Paid entry fee"
             />
+          </div>
+
+          {/* Fantasy XI stats */}
+          <div className="mt-5">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Fantasy XI</p>
+            <div className="grid gap-5 sm:grid-cols-3">
+              <StatCard
+                label="FPL teams"
+                value={fplStats.totalFplTeams.toLocaleString()}
+                accent="emerald"
+                hint={`Active squads · 2026/27`}
+              />
+              <StatCard
+                label="FPL leagues"
+                value={fplStats.totalFplLeagues.toLocaleString()}
+                accent="emerald"
+                hint="Classic &amp; H2H combined"
+              />
+              <StatCard
+                label="GW avg score"
+                value={
+                  fplStats.currentGwAvgScore !== null
+                    ? `${fplStats.currentGwAvgScore} pts`
+                    : "—"
+                }
+                accent="emerald"
+                hint={
+                  fplStats.currentGwNumber !== null
+                    ? `Gameweek ${fplStats.currentGwNumber}`
+                    : "No active gameweek"
+                }
+              />
+            </div>
           </div>
 
           {/* Wallet section */}

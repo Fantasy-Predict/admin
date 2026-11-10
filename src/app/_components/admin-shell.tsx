@@ -17,6 +17,7 @@ const ADMIN_NAV = [
   { to: "/pools", label: "Pools" },
   { to: "/results", label: "Fixtures & results" },
   { to: "/payments", label: "Payments" },
+  { to: "/fpl-leagues", label: "Fantasy XI Leagues" },
 ] as const;
 
 function isActive(pathname: string, to: string) {

@@ -888,6 +888,67 @@ export async function resetUserWalletBalance(userId: string): Promise<void> {
   await apiFetch(`/v1/admins/users/${userId}/wallet/reset`, { method: "POST", token: getToken() });
 }
 
+// ─── Fantasy XI (FPL) ────────────────────────────────────────────────────────
+
+export type FplAdminStats = {
+  totalFplTeams: number;
+  totalFplLeagues: number;
+  currentGwNumber: number | null;
+  currentGwAvgScore: number | null;
+};
+
+export type AdminFplLeague = {
+  _id: string;
+  name: string;
+  code: string;
+  type: "classic" | "h2h";
+  creatorId: string;
+  season: string;
+  isPrivate: boolean;
+  isFree: boolean;
+  entryFee: number;
+  totalMembers: number;
+  maxMembers: number | null;
+  createdAt: string;
+};
+
+export async function getFplAdminStats(): Promise<FplAdminStats> {
+  const res = await apiFetch<FplAdminStats>("/v1/admins/fpl/stats", { token: getToken() });
+  return {
+    totalFplTeams: res.totalFplTeams ?? 0,
+    totalFplLeagues: res.totalFplLeagues ?? 0,
+    currentGwNumber: res.currentGwNumber ?? null,
+    currentGwAvgScore: res.currentGwAvgScore ?? null,
+  };
+}
+
+export async function getAdminFplLeagues(
+  options: { page?: number; limit?: number } = {},
+): Promise<{ leagues: AdminFplLeague[]; total: number; pages: number }> {
+  const params = new URLSearchParams();
+  params.set("page", String(options.page ?? 1));
+  params.set("limit", String(options.limit ?? 20));
+  const res = await apiFetch<{ leagues: AdminFplLeague[]; total: number; pages: number }>(
+    `/v1/admins/fpl/leagues?${params.toString()}`,
+    { token: getToken() },
+  );
+  return {
+    leagues: res.leagues ?? [],
+    total: res.total ?? 0,
+    pages: res.pages ?? 1,
+  };
+}
+
+export async function deleteAdminFplLeague(leagueId: string): Promise<void> {
+  await apiFetch(`/v1/admins/fpl/leagues/${leagueId}`, { method: "DELETE", token: getToken() });
+}
+
+export async function triggerAdminFplSync(): Promise<void> {
+  await apiFetch("/v1/admins/fpl/sync", { method: "POST", token: getToken() });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export async function getPools(
   options: { page?: number; name?: string; privacy?: string; personal?: boolean } = {},
 ): Promise<Pool[]> {

@@ -10,7 +10,7 @@ export function StatCard({
   label: string;
   value: string;
   hint?: string;
-  accent?: "gold" | "primary" | "success";
+  accent?: "gold" | "primary" | "success" | "emerald";
 }) {
   return (
     <Card className="gap-0 p-5 shadow-[var(--shadow-card)]">
@@ -23,6 +23,7 @@ export function StatCard({
           accent === "gold" && "text-gold",
           accent === "primary" && "text-primary",
           accent === "success" && "text-success",
+          accent === "emerald" && "text-emerald-600",
         )}
       >
         {value}
