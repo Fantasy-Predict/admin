@@ -969,6 +969,85 @@ export async function getPlatformFeeStats(season?: string): Promise<PlatformFeeS
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ============================================================
+// Admin platform wallet (10% fee earnings)
+// ============================================================
+
+export type AdminWallet = {
+  season: string;
+  totalEarned: number;
+  totalWithdrawn: number;
+  availableBalance: number;
+};
+
+export type AdminEarningsWithdrawal = {
+  id: string;
+  amount: number;
+  accountNumber: string;
+  bankName: string;
+  accountName: string;
+  paystackReference: string;
+  status: "pending" | "success" | "failed";
+  date: string;
+};
+
+export async function getAdminWallet(season?: string): Promise<AdminWallet> {
+  const params = season ? `?season=${encodeURIComponent(season)}` : "";
+  const res = await apiFetch<AdminWallet>(`/v1/admins/admin-wallet${params}`, { token: getToken() });
+  return {
+    season: res.season ?? "2026/27",
+    totalEarned: res.totalEarned ?? 0,
+    totalWithdrawn: res.totalWithdrawn ?? 0,
+    availableBalance: res.availableBalance ?? 0,
+  };
+}
+
+export async function adminPlatformWithdraw(payload: {
+  amount: number;
+  accountNumber: string;
+  bankCode: string;
+  accountName: string;
+  bankName: string;
+}): Promise<void> {
+  await apiFetch<unknown>("/v1/admins/admin-wallet/withdraw", {
+    method: "POST",
+    token: getToken(),
+    body: payload,
+  });
+}
+
+type EarningsWithdrawalDoc = {
+  _id?: string;
+  id?: string;
+  amount?: number;
+  accountNumber?: string;
+  bankName?: string;
+  accountName?: string;
+  paystackReference?: string;
+  status?: "pending" | "success" | "failed";
+  createdAt?: string;
+};
+
+export async function getAdminEarningsWithdrawals(): Promise<AdminEarningsWithdrawal[]> {
+  const res = await apiFetch<EarningsWithdrawalDoc[] | { data?: EarningsWithdrawalDoc[] }>(
+    "/v1/admins/admin-wallet/withdrawals",
+    { token: getToken() }
+  );
+  const list = Array.isArray(res) ? res : (res?.data ?? []);
+  return list.map((w) => ({
+    id: w._id ?? w.id ?? "",
+    amount: w.amount ?? 0,
+    accountNumber: w.accountNumber ?? "",
+    bankName: w.bankName ?? "",
+    accountName: w.accountName ?? "",
+    paystackReference: w.paystackReference ?? "",
+    status: w.status ?? "pending",
+    date: formatTxDate(w.createdAt ?? ""),
+  }));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export async function getPools(
   options: { page?: number; name?: string; privacy?: string; personal?: boolean } = {},
 ): Promise<Pool[]> {

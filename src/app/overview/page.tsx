@@ -14,11 +14,16 @@ import {
   getAdminWalletStats,
   getFplAdminStats,
   getPlatformFeeStats,
+  getAdminWallet,
+  adminPlatformWithdraw,
+  getAdminEarningsWithdrawals,
   type AdminDashboard,
   type WalletStats,
   type MonthlyBreakdown,
   type FplAdminStats,
   type PlatformFeeStats,
+  type AdminWallet,
+  type AdminEarningsWithdrawal,
 } from "../_lib/api";
 
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -92,6 +97,13 @@ const EMPTY_FEES: PlatformFeeStats = {
   breakdown: {},
 };
 
+const EMPTY_ADMIN_WALLET: AdminWallet = {
+  season: "2026/27",
+  totalEarned: 0,
+  totalWithdrawn: 0,
+  availableBalance: 0,
+};
+
 const SOURCE_LABELS: Record<string, string> = {
   "fpl-league-create": "FXI League created",
   "fpl-league-join": "FXI League joined",
@@ -106,19 +118,50 @@ export default function AdminOverview() {
   const [walletStats, setWalletStats] = useState<WalletStats>(EMPTY_WALLET);
   const [fplStats, setFplStats] = useState<FplAdminStats>(EMPTY_FPL);
   const [feeStats, setFeeStats] = useState<PlatformFeeStats>(EMPTY_FEES);
+  const [adminWallet, setAdminWallet] = useState<AdminWallet>(EMPTY_ADMIN_WALLET);
+  const [earningsHistory, setEarningsHistory] = useState<AdminEarningsWithdrawal[]>([]);
   const [loading, setLoading] = useState(true);
   const [showBreakdown, setShowBreakdown] = useState(false);
+  const [showEarningsHistory, setShowEarningsHistory] = useState(false);
+  const [showWithdrawForm, setShowWithdrawForm] = useState(false);
+  const [withdrawing, setWithdrawing] = useState(false);
+  const [withdrawForm, setWithdrawForm] = useState({
+    amount: "",
+    accountNumber: "",
+    bankCode: "",
+    accountName: "",
+    bankName: "",
+  });
   const [mode, setMode] = useState<"fp" | "fxi">("fp");
+
+  const refreshAdminWallet = (active = true) => {
+    Promise.all([getAdminWallet(), getAdminEarningsWithdrawals()])
+      .then(([w, history]) => {
+        if (!active) return;
+        setAdminWallet(w);
+        setEarningsHistory(history);
+      })
+      .catch(() => {});
+  };
 
   useEffect(() => {
     let active = true;
-    Promise.all([getAdminDashboard(), getAdminWalletStats(), getFplAdminStats(), getPlatformFeeStats()])
-      .then(([dash, wallet, fpl, fees]) => {
+    Promise.all([
+      getAdminDashboard(),
+      getAdminWalletStats(),
+      getFplAdminStats(),
+      getPlatformFeeStats(),
+      getAdminWallet(),
+      getAdminEarningsWithdrawals(),
+    ])
+      .then(([dash, wallet, fpl, fees, adminW, history]) => {
         if (!active) return;
         if (dash) setStats(dash);
         if (wallet) setWalletStats(wallet);
         if (fpl) setFplStats(fpl);
         if (fees) setFeeStats(fees);
+        setAdminWallet(adminW);
+        setEarningsHistory(history);
       })
       .catch((error) => {
         toast.error(error instanceof Error ? error.message : "Unable to load the dashboard");
@@ -128,6 +171,41 @@ export default function AdminOverview() {
       });
     return () => { active = false; };
   }, []);
+
+  const handleWithdraw = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const amount = Number(withdrawForm.amount);
+    if (!amount || amount <= 0) {
+      toast.error("Enter a valid amount");
+      return;
+    }
+    if (amount > adminWallet.availableBalance) {
+      toast.error("Amount exceeds available balance");
+      return;
+    }
+    if (!withdrawForm.accountNumber || !withdrawForm.bankCode || !withdrawForm.accountName) {
+      toast.error("Fill in all bank details");
+      return;
+    }
+    setWithdrawing(true);
+    try {
+      await adminPlatformWithdraw({
+        amount,
+        accountNumber: withdrawForm.accountNumber,
+        bankCode: withdrawForm.bankCode,
+        accountName: withdrawForm.accountName,
+        bankName: withdrawForm.bankName || withdrawForm.accountName,
+      });
+      toast.success("Withdrawal initiated — check your Paystack dashboard for confirmation");
+      setShowWithdrawForm(false);
+      setWithdrawForm({ amount: "", accountNumber: "", bankCode: "", accountName: "", bankName: "" });
+      refreshAdminWallet();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Withdrawal failed — try again");
+    } finally {
+      setWithdrawing(false);
+    }
+  };
 
   return (
     <AdminShell
@@ -302,6 +380,177 @@ export default function AdminOverview() {
             </Card>
           </div>
         </>
+      )}
+
+      {/* ── Platform earnings wallet (always visible) ── */}
+      {!loading && (
+        <div className="mt-8">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            Platform Earnings Wallet
+          </p>
+          <Card className="p-6 shadow-[var(--shadow-card)]">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <p className="text-xs text-muted-foreground">Available to withdraw</p>
+                <p className="num mt-1 text-3xl font-bold text-gold">
+                  {formatNaira(adminWallet.availableBalance)}
+                </p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  10% fees from pools &amp; FXI leagues
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setShowEarningsHistory((v) => !v)}
+                >
+                  {showEarningsHistory ? "Hide history" : "Withdrawal history"}
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => setShowWithdrawForm((v) => !v)}
+                  disabled={adminWallet.availableBalance <= 0}
+                >
+                  Withdraw
+                </Button>
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              <div className="rounded-lg border border-border bg-muted/30 p-4">
+                <p className="text-xs text-muted-foreground">Total Earned</p>
+                <p className="num mt-1 text-lg font-bold text-success">{formatNaira(adminWallet.totalEarned)}</p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">All-time 10% platform fees</p>
+              </div>
+              <div className="rounded-lg border border-border bg-muted/30 p-4">
+                <p className="text-xs text-muted-foreground">Total Withdrawn</p>
+                <p className="num mt-1 text-lg font-bold text-destructive">{formatNaira(adminWallet.totalWithdrawn)}</p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">Already paid out to your account</p>
+              </div>
+            </div>
+
+            {/* Withdraw form */}
+            {showWithdrawForm && (
+              <form onSubmit={handleWithdraw} className="mt-6 border-t border-border pt-5">
+                <p className="mb-4 text-sm font-semibold">Withdraw to bank account</p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-xs text-muted-foreground">Amount (₦)</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max={adminWallet.availableBalance}
+                      placeholder="e.g. 50000"
+                      value={withdrawForm.amount}
+                      onChange={(e) => setWithdrawForm((f) => ({ ...f, amount: e.target.value }))}
+                      className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-muted-foreground">Bank code</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 058 (GTBank)"
+                      value={withdrawForm.bankCode}
+                      onChange={(e) => setWithdrawForm((f) => ({ ...f, bankCode: e.target.value }))}
+                      className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-muted-foreground">Account number</label>
+                    <input
+                      type="text"
+                      placeholder="10-digit NUBAN"
+                      maxLength={10}
+                      value={withdrawForm.accountNumber}
+                      onChange={(e) => setWithdrawForm((f) => ({ ...f, accountNumber: e.target.value }))}
+                      className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-muted-foreground">Account name</label>
+                    <input
+                      type="text"
+                      placeholder="As on bank records"
+                      value={withdrawForm.accountName}
+                      onChange={(e) => setWithdrawForm((f) => ({ ...f, accountName: e.target.value }))}
+                      className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary"
+                      required
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="mb-1 block text-xs text-muted-foreground">Bank name (optional)</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Guaranty Trust Bank"
+                      value={withdrawForm.bankName}
+                      onChange={(e) => setWithdrawForm((f) => ({ ...f, bankName: e.target.value }))}
+                      className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                </div>
+                <div className="mt-4 flex gap-2 justify-end">
+                  <Button type="button" size="sm" variant="outline" onClick={() => setShowWithdrawForm(false)}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" size="sm" disabled={withdrawing}>
+                    {withdrawing ? "Processing…" : "Confirm withdrawal"}
+                  </Button>
+                </div>
+              </form>
+            )}
+
+            {/* Earnings withdrawal history */}
+            {showEarningsHistory && (
+              <div className="mt-6 border-t border-border pt-5">
+                <p className="mb-4 text-sm font-medium text-muted-foreground">Withdrawal history</p>
+                {earningsHistory.length === 0 ? (
+                  <p className="py-4 text-center text-sm text-muted-foreground">No withdrawals yet.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                          <th className="pb-2 pr-4 font-medium">Date</th>
+                          <th className="pb-2 pr-4 font-medium">Account</th>
+                          <th className="pb-2 pr-4 text-right font-medium">Amount</th>
+                          <th className="pb-2 text-right font-medium">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {earningsHistory.map((w) => (
+                          <tr key={w.id} className="border-b border-border/50 last:border-0">
+                            <td className="py-2.5 pr-4 text-muted-foreground">{w.date}</td>
+                            <td className="py-2.5 pr-4">
+                              <span className="font-medium">{w.accountName}</span>
+                              <span className="text-xs text-muted-foreground"> · {w.accountNumber}</span>
+                            </td>
+                            <td className="num py-2.5 pr-4 text-right font-semibold">{formatNaira(w.amount)}</td>
+                            <td className="py-2.5 text-right">
+                              <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
+                                w.status === "success"
+                                  ? "bg-success/10 text-success"
+                                  : w.status === "failed"
+                                  ? "bg-destructive/10 text-destructive"
+                                  : "bg-muted text-muted-foreground"
+                              }`}>
+                                {w.status}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+          </Card>
+        </div>
       )}
 
       <div className="mt-10 grid gap-8 lg:grid-cols-[1.2fr_1fr]">
