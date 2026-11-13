@@ -13,10 +13,12 @@ import {
   getAdminDashboard,
   getAdminWalletStats,
   getFplAdminStats,
+  getPlatformFeeStats,
   type AdminDashboard,
   type WalletStats,
   type MonthlyBreakdown,
   type FplAdminStats,
+  type PlatformFeeStats,
 } from "../_lib/api";
 
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -82,21 +84,41 @@ const EMPTY_FPL: FplAdminStats = {
   currentGwAvgScore: null,
 };
 
+const EMPTY_FEES: PlatformFeeStats = {
+  season: "2026/27",
+  totalCollected: 0,
+  totalPaidOut: 0,
+  net: 0,
+  breakdown: {},
+};
+
+const SOURCE_LABELS: Record<string, string> = {
+  "fpl-league-create": "FXI League created",
+  "fpl-league-join": "FXI League joined",
+  "fpl-league-weekly-payout": "FXI Weekly payout",
+  "fpl-league-season-payout": "FXI Season payout",
+  "fpl-challenge": "FXI Challenge",
+  "prediction-pool": "Prediction pool",
+};
+
 export default function AdminOverview() {
   const [stats, setStats] = useState<AdminDashboard>(EMPTY_DASHBOARD);
   const [walletStats, setWalletStats] = useState<WalletStats>(EMPTY_WALLET);
   const [fplStats, setFplStats] = useState<FplAdminStats>(EMPTY_FPL);
+  const [feeStats, setFeeStats] = useState<PlatformFeeStats>(EMPTY_FEES);
   const [loading, setLoading] = useState(true);
   const [showBreakdown, setShowBreakdown] = useState(false);
+  const [mode, setMode] = useState<"fp" | "fxi">("fp");
 
   useEffect(() => {
     let active = true;
-    Promise.all([getAdminDashboard(), getAdminWalletStats(), getFplAdminStats()])
-      .then(([dash, wallet, fpl]) => {
+    Promise.all([getAdminDashboard(), getAdminWalletStats(), getFplAdminStats(), getPlatformFeeStats()])
+      .then(([dash, wallet, fpl, fees]) => {
         if (!active) return;
         if (dash) setStats(dash);
         if (wallet) setWalletStats(wallet);
         if (fpl) setFplStats(fpl);
+        if (fees) setFeeStats(fees);
       })
       .catch((error) => {
         toast.error(error instanceof Error ? error.message : "Unable to load the dashboard");
@@ -117,11 +139,29 @@ export default function AdminOverview() {
         </Button>
       }
     >
+      {/* Mode switcher */}
+      <div className="mb-6 flex items-center gap-1 w-fit rounded-xl border border-border bg-muted/30 p-1">
+        {(["fp", "fxi"] as const).map(m => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => setMode(m)}
+            className={`rounded-lg px-5 py-2 text-sm font-semibold transition-colors ${
+              mode === m
+                ? m === "fxi" ? "bg-background shadow text-gold" : "bg-background shadow text-primary"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {m === "fp" ? "Fan Predictor" : "Fantasy XI"}
+          </button>
+        ))}
+      </div>
+
       {loading ? (
         <p className="text-sm text-muted-foreground">Loading the dashboard…</p>
-      ) : (
+      ) : mode === "fp" ? (
         <>
-          {/* Top stats — users + pool split */}
+          {/* FP stats — users + pool split */}
           <div className="grid gap-5 sm:grid-cols-3">
             <StatCard
               label="Total users"
@@ -140,39 +180,6 @@ export default function AdminOverview() {
               accent="gold"
               hint="Paid entry fee"
             />
-          </div>
-
-          {/* Fantasy XI stats */}
-          <div className="mt-5">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Fantasy XI</p>
-            <div className="grid gap-5 sm:grid-cols-3">
-              <StatCard
-                label="FPL teams"
-                value={fplStats.totalFplTeams.toLocaleString()}
-                accent="emerald"
-                hint={`Active squads · 2026/27`}
-              />
-              <StatCard
-                label="FPL leagues"
-                value={fplStats.totalFplLeagues.toLocaleString()}
-                accent="emerald"
-                hint="Classic &amp; H2H combined"
-              />
-              <StatCard
-                label="GW avg score"
-                value={
-                  fplStats.currentGwAvgScore !== null
-                    ? `${fplStats.currentGwAvgScore} pts`
-                    : "—"
-                }
-                accent="emerald"
-                hint={
-                  fplStats.currentGwNumber !== null
-                    ? `Gameweek ${fplStats.currentGwNumber}`
-                    : "No active gameweek"
-                }
-              />
-            </div>
           </div>
 
           {/* Wallet section */}
@@ -213,6 +220,85 @@ export default function AdminOverview() {
                   <MonthlyBreakdownTable rows={walletStats.monthly} />
                 </div>
               )}
+            </Card>
+          </div>
+        </>
+      ) : (
+        /* ── Fantasy XI mode ── */
+        <>
+          <div className="grid gap-5 sm:grid-cols-3">
+            <StatCard
+              label="FPL teams"
+              value={fplStats.totalFplTeams.toLocaleString()}
+              accent="gold"
+              hint="Active squads · 2026/27"
+            />
+            <StatCard
+              label="FPL leagues"
+              value={fplStats.totalFplLeagues.toLocaleString()}
+              accent="gold"
+              hint="Classic leagues"
+            />
+            <StatCard
+              label="GW avg score"
+              value={fplStats.currentGwAvgScore !== null ? `${fplStats.currentGwAvgScore} pts` : "—"}
+              accent="gold"
+              hint={fplStats.currentGwNumber !== null ? `Gameweek ${fplStats.currentGwNumber}` : "No active gameweek"}
+            />
+          </div>
+
+          {/* Platform fee stats */}
+          <div className="mt-5">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Platform Revenue · {feeStats.season}</p>
+            <Card className="p-6 shadow-[var(--shadow-card)]">
+              <div className="grid gap-4 sm:grid-cols-3 mb-6">
+                <div className="rounded-lg border border-border bg-muted/30 p-4">
+                  <p className="text-xs text-muted-foreground">Collected (10%)</p>
+                  <p className="num mt-1 text-xl font-bold text-success">{formatNaira(feeStats.totalCollected)}</p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">Platform fees taken</p>
+                </div>
+                <div className="rounded-lg border border-border bg-muted/30 p-4">
+                  <p className="text-xs text-muted-foreground">Paid out (90%)</p>
+                  <p className="num mt-1 text-xl font-bold text-destructive">{formatNaira(feeStats.totalPaidOut)}</p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">Winnings disbursed</p>
+                </div>
+                <div className="rounded-lg border border-border bg-muted/30 p-4">
+                  <p className="text-xs text-muted-foreground">Net held</p>
+                  <p className="num mt-1 text-xl font-bold text-gold">{formatNaira(feeStats.net)}</p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">Platform earnings</p>
+                </div>
+              </div>
+
+              {/* Breakdown by source */}
+              {Object.keys(feeStats.breakdown).length > 0 && (
+                <div className="border-t border-border pt-5">
+                  <p className="mb-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Breakdown by type</p>
+                  <div className="space-y-2">
+                    {Object.entries(feeStats.breakdown).map(([source, data]) => (
+                      <div key={source} className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">{SOURCE_LABELS[source] ?? source}</span>
+                        <div className="flex items-center gap-4">
+                          <span className="text-xs text-muted-foreground">{data.count} tx</span>
+                          <span className="font-semibold">{formatNaira(data.total)}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </Card>
+          </div>
+
+          {/* FXI league management link */}
+          <div className="mt-5">
+            <Card className="p-5 shadow-[var(--shadow-card)] flex items-center justify-between gap-4">
+              <div>
+                <p className="font-semibold text-sm">Fantasy XI Leagues</p>
+                <p className="text-xs text-muted-foreground mt-0.5">View all leagues, delete any, and trigger a full data sync</p>
+              </div>
+              <Button asChild size="sm" variant="outline">
+                <Link href="/fpl-leagues">Manage leagues</Link>
+              </Button>
             </Card>
           </div>
         </>

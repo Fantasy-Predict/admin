@@ -947,6 +947,26 @@ export async function triggerAdminFplSync(): Promise<void> {
   await apiFetch("/v1/admins/fpl/sync", { method: "POST", token: getToken() });
 }
 
+export type PlatformFeeStats = {
+  season: string;
+  totalCollected: number;
+  totalPaidOut: number;
+  net: number;
+  breakdown: Record<string, { count: number; total: number }>;
+};
+
+export async function getPlatformFeeStats(season?: string): Promise<PlatformFeeStats> {
+  const params = season ? `?season=${encodeURIComponent(season)}` : "";
+  const res = await apiFetch<PlatformFeeStats>(`/v1/admins/fpl/fees${params}`, { token: getToken() });
+  return {
+    season: res.season ?? "2026/27",
+    totalCollected: res.totalCollected ?? 0,
+    totalPaidOut: res.totalPaidOut ?? 0,
+    net: res.net ?? 0,
+    breakdown: res.breakdown ?? {},
+  };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function getPools(
