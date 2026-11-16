@@ -13,6 +13,7 @@ import {
   getUsers,
   suspendUser,
   unsuspendUser,
+  deleteUserFplTeam,
   getUserWalletStats,
   type PlatformUser,
   type UserWalletStats,
@@ -119,6 +120,7 @@ export default function AdminUsers() {
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [unsuspendConfirmId, setUnsuspendConfirmId] = useState<string | null>(null);
+  const [removeFplConfirmId, setRemoveFplConfirmId] = useState<string | null>(null);
   const [walletUser, setWalletUser] = useState<PlatformUser | null>(null);
 
   useEffect(() => {
@@ -172,6 +174,20 @@ export default function AdminUsers() {
     }
   }
 
+  async function handleRemoveFplTeam(user: PlatformUser) {
+    if (busyId) return;
+    setBusyId(user.id);
+    try {
+      await deleteUserFplTeam(user.id);
+      toast.success(`FPL team removed for ${user.username}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to remove FPL team");
+    } finally {
+      setBusyId(null);
+      setRemoveFplConfirmId(null);
+    }
+  }
+
   return (
     <AdminShell title="Users" description="Search player accounts, review wallet balances and suspend accounts.">
       <Input
@@ -217,7 +233,7 @@ export default function AdminUsers() {
                   </Badge>
                 </td>
                 <td className="px-5 py-3.5 text-right">
-                  <div className="flex justify-end gap-2">
+                  <div className="flex justify-end gap-2 flex-wrap">
                     <Button
                       size="sm"
                       variant="outline"
@@ -225,6 +241,36 @@ export default function AdminUsers() {
                     >
                       Wallet
                     </Button>
+
+                    {u.hasFplTeam && removeFplConfirmId === u.id ? (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setRemoveFplConfirmId(null)}
+                          disabled={busyId === u.id}
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => handleRemoveFplTeam(u)}
+                          disabled={busyId === u.id}
+                        >
+                          {busyId === u.id ? "…" : "Confirm remove"}
+                        </Button>
+                      </>
+                    ) : u.hasFplTeam ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => { setRemoveFplConfirmId(u.id); setConfirmId(null); setUnsuspendConfirmId(null); }}
+                        className="border-destructive/40 text-destructive hover:text-destructive"
+                      >
+                        Remove FPL
+                      </Button>
+                    ) : null}
 
                     {u.status === "suspended" ? (
                       unsuspendConfirmId === u.id ? (

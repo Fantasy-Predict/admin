@@ -254,6 +254,7 @@ export type PlatformUser = {
   joined: string;
   balance: number;
   status: string;
+  hasFplTeam: boolean;
 };
 
 type PlatformUserDoc = {
@@ -277,16 +278,18 @@ function formatUserDate(iso: string | undefined): string {
   return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
 }
 
-function toPlatformUser(u: PlatformUserDoc): PlatformUser {
+function toPlatformUser(u: PlatformUserDoc, fplSet: Set<string>): PlatformUser {
   const fullName = [u.firstName, u.lastName].filter(Boolean).join(" ");
+  const id = u._id ?? u.id ?? "";
   return {
-    id: u._id ?? u.id ?? "",
+    id,
     username: u.username ?? (fullName || (u.email ? u.email.split("@")[0] : "Unknown user")),
     email: u.email ?? "",
     country: u.countryCode ?? "",
     joined: formatUserDate(u.createdAt),
     balance: 0,
     status: u.isActive === false ? "suspended" : "active",
+    hasFplTeam: fplSet.has(id),
   };
 }
 
@@ -298,12 +301,16 @@ export async function getUsers(
     if (value) params.set(key, value);
   });
   const qs = params.toString();
-  const res = await apiFetch<{ docs?: PlatformUserDoc[] } | PlatformUserDoc[]>(
-    `/v1/users${qs ? `?${qs}` : ""}`,
-    { token: getToken() }
-  );
+  const [res, fplRes] = await Promise.all([
+    apiFetch<{ docs?: PlatformUserDoc[] } | PlatformUserDoc[]>(
+      `/v1/users${qs ? `?${qs}` : ""}`,
+      { token: getToken() }
+    ),
+    apiFetch<{ userIds: string[] }>("/v1/admins/fpl/team-user-ids", { token: getToken() }).catch(() => ({ userIds: [] as string[] })),
+  ]);
+  const fplSet = new Set<string>(fplRes.userIds ?? []);
   const list = Array.isArray(res) ? res : (res?.docs ?? []);
-  return list.map(toPlatformUser);
+  return list.map((u) => toPlatformUser(u, fplSet));
 }
 
 // Suspend a platform user — PATCH /v1/admins/users/:id/suspend
@@ -318,6 +325,14 @@ export async function suspendUser(userId: string): Promise<unknown> {
 export async function unsuspendUser(userId: string): Promise<unknown> {
   return apiFetch<unknown>(`/v1/admins/users/${userId}/unsuspend`, {
     method: "PATCH",
+    token: getToken(),
+  });
+}
+
+// Remove a user's FPL team for the current season — DELETE /v1/admins/users/:id/fpl-team
+export async function deleteUserFplTeam(userId: string): Promise<unknown> {
+  return apiFetch<unknown>(`/v1/admins/users/${userId}/fpl-team`, {
+    method: "DELETE",
     token: getToken(),
   });
 }
@@ -947,6 +962,7 @@ export async function triggerAdminFplSync(): Promise<void> {
   await apiFetch("/v1/admins/fpl/sync", { method: "POST", token: getToken() });
 }
 
+
 export type PlatformFeeStats = {
   season: string;
   totalCollected: number;
@@ -1008,6 +1024,7 @@ export async function adminPlatformWithdraw(payload: {
   bankCode: string;
   accountName: string;
   bankName: string;
+  password: string;
 }): Promise<void> {
   await apiFetch<unknown>("/v1/admins/admin-wallet/withdraw", {
     method: "POST",

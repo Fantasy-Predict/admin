@@ -7,6 +7,7 @@ import { AdminShell } from "../_components/admin-shell";
 import { Badge } from "../_components/ui/badge";
 import { Card } from "../_components/ui/card";
 import { Button } from "../_components/ui/button";
+import { Skeleton } from "../_components/ui/skeleton";
 import { StatCard } from "../_components/stat-card";
 import { formatNaira } from "../_lib/mock-data";
 import {
@@ -129,6 +130,7 @@ export default function AdminOverview() {
     amount: "",
     accountNumber: "",
     bankCode: "",
+    password: "",
     accountName: "",
     bankName: "",
   });
@@ -187,6 +189,10 @@ export default function AdminOverview() {
       toast.error("Fill in all bank details");
       return;
     }
+    if (!withdrawForm.password) {
+      toast.error("Enter your password to confirm this withdrawal");
+      return;
+    }
     setWithdrawing(true);
     try {
       await adminPlatformWithdraw({
@@ -195,10 +201,11 @@ export default function AdminOverview() {
         bankCode: withdrawForm.bankCode,
         accountName: withdrawForm.accountName,
         bankName: withdrawForm.bankName || withdrawForm.accountName,
+        password: withdrawForm.password,
       });
       toast.success("Withdrawal initiated — check your Paystack dashboard for confirmation");
       setShowWithdrawForm(false);
-      setWithdrawForm({ amount: "", accountNumber: "", bankCode: "", accountName: "", bankName: "" });
+      setWithdrawForm({ amount: "", accountNumber: "", bankCode: "", accountName: "", bankName: "", password: "" });
       refreshAdminWallet();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Withdrawal failed — try again");
@@ -236,7 +243,62 @@ export default function AdminOverview() {
       </div>
 
       {loading ? (
-        <p className="text-sm text-muted-foreground">Loading the dashboard…</p>
+        <>
+          {/* Stat cards skeleton */}
+          <div className="grid gap-5 sm:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Card key={i} className="gap-0 p-5 shadow-[var(--shadow-card)]">
+                <Skeleton className="h-3 w-24" />
+                <Skeleton className="mt-3 h-7 w-28" />
+                <Skeleton className="mt-2 h-3 w-36" />
+              </Card>
+            ))}
+          </div>
+          {/* Wallet card skeleton */}
+          <div className="mt-5">
+            <Card className="p-6 shadow-[var(--shadow-card)]">
+              <div className="flex items-center justify-between">
+                <Skeleton className="h-5 w-32" />
+                <Skeleton className="h-8 w-36 rounded-md" />
+              </div>
+              <div className="mt-5 grid gap-4 sm:grid-cols-3">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="rounded-lg border border-border bg-muted/30 p-4">
+                    <Skeleton className="h-3 w-20" />
+                    <Skeleton className="mt-2 h-6 w-28" />
+                    <Skeleton className="mt-1.5 h-3 w-32" />
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </div>
+          {/* Earnings wallet skeleton */}
+          <div className="mt-8">
+            <Skeleton className="mb-3 h-3 w-44" />
+            <Card className="p-6 shadow-[var(--shadow-card)]">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <Skeleton className="h-3 w-28" />
+                  <Skeleton className="mt-2 h-9 w-36" />
+                  <Skeleton className="mt-1.5 h-3 w-44" />
+                </div>
+                <div className="flex gap-2">
+                  <Skeleton className="h-8 w-32 rounded-md" />
+                  <Skeleton className="h-8 w-24 rounded-md" />
+                </div>
+              </div>
+              <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                {Array.from({ length: 2 }).map((_, i) => (
+                  <div key={i} className="rounded-lg border border-border bg-muted/30 p-4">
+                    <Skeleton className="h-3 w-20" />
+                    <Skeleton className="mt-2 h-6 w-28" />
+                    <Skeleton className="mt-1.5 h-3 w-36" />
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </div>
+        </>
       ) : mode === "fp" ? (
         <>
           {/* FP stats — users + pool split */}
@@ -383,8 +445,7 @@ export default function AdminOverview() {
       )}
 
       {/* ── Platform earnings wallet (always visible) ── */}
-      {!loading && (
-        <div className="mt-8">
+      {!loading && <div className="mt-8">
           <p className="mb-3 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
             Platform Earnings Wallet
           </p>
@@ -493,6 +554,17 @@ export default function AdminOverview() {
                     />
                   </div>
                 </div>
+                <div className="mt-3">
+                  <label className="mb-1 block text-xs text-muted-foreground">Your password (required to confirm)</label>
+                  <input
+                    type="password"
+                    placeholder="Enter your admin password"
+                    value={withdrawForm.password}
+                    onChange={(e) => setWithdrawForm((f) => ({ ...f, password: e.target.value }))}
+                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary"
+                    required
+                  />
+                </div>
                 <div className="mt-4 flex gap-2 justify-end">
                   <Button type="button" size="sm" variant="outline" onClick={() => setShowWithdrawForm(false)}>
                     Cancel
@@ -550,10 +622,9 @@ export default function AdminOverview() {
               </div>
             )}
           </Card>
-        </div>
-      )}
+        </div>}
 
-      <div className="mt-10 grid gap-8 lg:grid-cols-[1.2fr_1fr]">
+      {!loading && <div className="mt-10 grid gap-8 lg:grid-cols-[1.2fr_1fr]">
         <section>
           <h2 className="text-lg font-semibold">Recent signups</h2>
           <Card className="mt-4 gap-0 divide-y divide-border p-0 shadow-[var(--shadow-card)]">
@@ -602,7 +673,7 @@ export default function AdminOverview() {
             )}
           </Card>
         </section>
-      </div>
+      </div>}
     </AdminShell>
   );
 }
