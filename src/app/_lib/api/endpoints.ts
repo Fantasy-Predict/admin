@@ -723,6 +723,8 @@ export type PoolDoc = {
   isCreator?: boolean;
   isActive?: boolean;
   code?: string;
+  settled?: boolean;
+  prizeDistribution?: { position: number; percentage: number }[];
 };
 
 function normalizePool(pool: PoolDoc | Pool, opts?: { mine?: boolean }): Pool {
