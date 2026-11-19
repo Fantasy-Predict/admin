@@ -773,6 +773,7 @@ function normalizePool(pool: PoolDoc | Pool, opts?: { mine?: boolean }): Pool {
     isCreator: p.isCreator,
     inviteCode: p.config?.code,
     isActive: p.isActive !== false,
+    settled: p.settled === true,
   };
 }
 
@@ -871,6 +872,13 @@ export async function closePool(poolId: string): Promise<void> {
 export async function reopenPool(poolId: string): Promise<void> {
   await apiFetch(`/v1/admins/pools/${poolId}/reopen`, {
     method: "PATCH",
+    token: getToken(),
+  });
+}
+
+export async function settlePool(poolId: string): Promise<void> {
+  await apiFetch(`/v1/admins/pools/${poolId}/settle`, {
+    method: "POST",
     token: getToken(),
   });
 }

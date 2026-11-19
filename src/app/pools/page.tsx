@@ -8,7 +8,7 @@ import { Badge } from "../_components/ui/badge";
 import { Button } from "../_components/ui/button";
 import { Skeleton } from "../_components/ui/skeleton";
 import { formatNaira } from "../_lib/mock-data";
-import { getPools, closePool, reopenPool, type Pool } from "../_lib/api";
+import { getPools, closePool, settlePool, type Pool } from "../_lib/api";
 import { cn } from "../_lib/utils";
 
 export default function AdminPools() {
@@ -16,7 +16,8 @@ export default function AdminPools() {
   const [loading, setLoading] = useState(true);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [closing, setClosing] = useState<string | null>(null);
-  const [reopening, setReopening] = useState<string | null>(null);
+  const [settleConfirmId, setSettleConfirmId] = useState<string | null>(null);
+  const [settling, setSettling] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -29,16 +30,17 @@ export default function AdminPools() {
     return () => { active = false; };
   }, []);
 
-  async function handleReopen(poolId: string) {
-    setReopening(poolId);
+  async function handleSettle(poolId: string) {
+    setSettling(poolId);
     try {
-      await reopenPool(poolId);
-      setPools((prev) => prev.map((p) => p.id === poolId ? { ...p, isActive: true } : p));
-      toast.success("Pool reopened successfully");
+      await settlePool(poolId);
+      setPools((prev) => prev.map((p) => p.id === poolId ? { ...p, settled: true } : p));
+      toast.success("Pool settled — prizes paid out to winners");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to reopen pool");
+      toast.error(error instanceof Error ? error.message : "Failed to settle pool");
     } finally {
-      setReopening(null);
+      setSettling(null);
+      setSettleConfirmId(null);
     }
   }
 
@@ -65,13 +67,14 @@ export default function AdminPools() {
           "Competition",
           "Entry fee",
           "Members",
+          "Status",
           "Action",
         ]}
       >
         {loading
           ? Array.from({ length: 4 }).map((_, i) => (
               <tr key={i} className="border-b border-border last:border-0">
-                {Array.from({ length: 6 }).map((_, j) => (
+                {Array.from({ length: 7 }).map((_, j) => (
                   <td key={j} className="px-5 py-3.5"><Skeleton className="h-4 w-20" /></td>
                 ))}
               </tr>
@@ -79,9 +82,11 @@ export default function AdminPools() {
           : pools.map((l) => {
               const isFree = l.type === "free";
               const isClosed = l.isActive === false;
+              const isSettled = l.settled === true;
               const isConfirming = confirmId === l.id;
               const isClosing = closing === l.id;
-              const isReopening = reopening === l.id;
+              const isSettleConfirming = settleConfirmId === l.id;
+              const isSettling = settling === l.id;
 
               return (
                 <tr key={l.id} className="border-b border-border last:border-0">
@@ -115,16 +120,51 @@ export default function AdminPools() {
                   <td className="num px-5 py-3.5">{formatNaira(l.entryFee)}</td>
                   <td className="num px-5 py-3.5">{l.players}/{l.maxPlayers}</td>
                   <td className="px-5 py-3.5">
-                    {isClosed ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={isReopening}
-                        onClick={() => handleReopen(l.id)}
-                      >
-                        {isReopening ? "Reopening…" : "Reopen"}
-                      </Button>
-                    ) : isConfirming ? (
+                    {isSettled ? (
+                      <Badge variant="outline" className="text-[10px] border-green-500/40 bg-green-500/10 text-green-600 dark:text-green-400">
+                        Settled
+                      </Badge>
+                    ) : isClosed ? (
+                      <Badge variant="outline" className="text-[10px] border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                        Awaiting settlement
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-[10px]">Active</Badge>
+                    )}
+                  </td>
+                  <td className="px-5 py-3.5">
+                    {isClosed && !isSettled ? (
+                      isSettleConfirming ? (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground">Pay out winners?</span>
+                          <Button
+                            size="sm"
+                            variant="default"
+                            disabled={isSettling}
+                            onClick={() => handleSettle(l.id)}
+                          >
+                            {isSettling ? "Settling…" : "Confirm"}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={isSettling}
+                            onClick={() => setSettleConfirmId(null)}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-green-500/40 text-green-600 hover:bg-green-500/10 dark:text-green-400"
+                          onClick={() => setSettleConfirmId(l.id)}
+                        >
+                          Settle
+                        </Button>
+                      )
+                    ) : isSettled ? null : isConfirming ? (
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-muted-foreground">Close this pool?</span>
                         <Button
