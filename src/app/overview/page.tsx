@@ -18,6 +18,7 @@ import {
   getAdminWallet,
   adminPlatformWithdraw,
   getAdminEarningsWithdrawals,
+  triggerLeaderboardSnapshot,
   type AdminDashboard,
   type WalletStats,
   type MonthlyBreakdown,
@@ -441,6 +442,8 @@ export default function AdminOverview() {
               </Button>
             </Card>
           </div>
+
+          <LeaderboardSnapshotCard />
         </>
       )}
 
@@ -675,5 +678,43 @@ export default function AdminOverview() {
         </section>
       </div>}
     </AdminShell>
+  );
+}
+
+function LeaderboardSnapshotCard() {
+  const [running, setRunning] = useState(false);
+
+  async function handleSnapshot() {
+    setRunning(true);
+    try {
+      const result = await triggerLeaderboardSnapshot();
+      if (result.ran) {
+        toast.success(
+          `Snapshot taken for ${result.matchdayLabel} — global:${result.global} nigeria:${result.nigeria} pools:${result.pool}`
+        );
+      } else {
+        toast.info("Snapshot ran but no new data to record.");
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Snapshot failed");
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  return (
+    <div className="mt-5">
+      <Card className="p-5 shadow-[var(--shadow-card)] flex items-center justify-between gap-4">
+        <div>
+          <p className="font-semibold text-sm">Leaderboard Snapshot</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Force a fresh Global / Nigeria / Pools snapshot now. Normally runs automatically after each matchday closes.
+          </p>
+        </div>
+        <Button size="sm" variant="outline" onClick={handleSnapshot} disabled={running}>
+          {running ? "Snapshotting…" : "Snapshot now"}
+        </Button>
+      </Card>
+    </div>
   );
 }

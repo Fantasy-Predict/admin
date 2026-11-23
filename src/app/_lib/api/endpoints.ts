@@ -972,6 +972,28 @@ export async function triggerAdminFplSync(): Promise<void> {
   await apiFetch("/v1/admins/fpl/sync", { method: "POST", token: getToken() });
 }
 
+export type LeaderboardSnapshotResult = {
+  ran: boolean;
+  matchdayLabel: string;
+  global: number;
+  nigeria: number;
+  pool: number;
+};
+
+export async function triggerLeaderboardSnapshot(): Promise<LeaderboardSnapshotResult> {
+  const res = await apiFetch<LeaderboardSnapshotResult>("/v1/admins/leaderboard/snapshot", {
+    method: "POST",
+    token: getToken(),
+  });
+  return {
+    ran: res?.ran ?? false,
+    matchdayLabel: res?.matchdayLabel ?? "",
+    global: res?.global ?? 0,
+    nigeria: res?.nigeria ?? 0,
+    pool: res?.pool ?? 0,
+  };
+}
+
 
 export type PlatformFeeStats = {
   season: string;
