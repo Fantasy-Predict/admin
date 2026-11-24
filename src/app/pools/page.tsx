@@ -124,6 +124,11 @@ export default function AdminPools() {
                       <Badge variant="outline" className="text-[10px] border-green-500/40 bg-green-500/10 text-green-600 dark:text-green-400">
                         Settled
                       </Badge>
+                    ) : isClosed && isFree ? (
+                      // Free pools have no money to pay out, so "closed" is the terminal state
+                      <Badge variant="outline" className="text-[10px] border-muted bg-muted/40 text-muted-foreground">
+                        Closed
+                      </Badge>
                     ) : isClosed ? (
                       <Badge variant="outline" className="text-[10px] border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400">
                         Awaiting settlement
@@ -133,7 +138,7 @@ export default function AdminPools() {
                     )}
                   </td>
                   <td className="px-5 py-3.5">
-                    {isClosed && !isSettled ? (
+                    {isClosed && !isSettled && !isFree ? (
                       isSettleConfirming ? (
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-muted-foreground">Pay out winners?</span>
@@ -164,7 +169,7 @@ export default function AdminPools() {
                           Settle
                         </Button>
                       )
-                    ) : isSettled ? null : isConfirming ? (
+                    ) : isSettled || isClosed ? null : isConfirming ? (
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-muted-foreground">Close this pool?</span>
                         <Button
