@@ -19,6 +19,8 @@ import {
   adminPlatformWithdraw,
   getAdminEarningsWithdrawals,
   triggerLeaderboardSnapshot,
+  getUnscoredMatches,
+  type UnscoredMatches,
   type AdminDashboard,
   type WalletStats,
   type MonthlyBreakdown,
@@ -302,6 +304,8 @@ export default function AdminOverview() {
         </>
       ) : mode === "fp" ? (
         <>
+          <StuckScoringAlert />
+
           {/* FP stats — users + pool split */}
           <div className="grid gap-5 sm:grid-cols-3">
             <StatCard
@@ -678,6 +682,88 @@ export default function AdminOverview() {
         </section>
       </div>}
     </AdminShell>
+  );
+}
+
+function StuckScoringAlert() {
+  const [data, setData] = useState<UnscoredMatches | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [open, setOpen] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    getUnscoredMatches(3)
+      .then((d) => { if (active) setData(d); })
+      .catch(() => { if (active) setFailed(true); });
+    return () => { active = false; };
+  }, []);
+
+  if (failed) {
+    return (
+      <Card className="mb-5 p-4 text-sm text-muted-foreground shadow-[var(--shadow-card)]">
+        Couldn&apos;t check for stuck match scoring right now.
+      </Card>
+    );
+  }
+  if (!data) return null;
+
+  if (data.count === 0) {
+    return (
+      <Card className="mb-5 flex items-center gap-3 border-success/30 p-4 shadow-[var(--shadow-card)]">
+        <span className="h-2.5 w-2.5 rounded-full bg-success" />
+        <p className="text-sm">
+          <span className="font-semibold">Scoring is on track.</span>{" "}
+          <span className="text-muted-foreground">
+            No matches are more than {data.thresholdHours} hours past kickoff without a score.
+          </span>
+        </p>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="mb-5 border-destructive/40 p-5 shadow-[var(--shadow-card)]">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-destructive">
+            {data.count} {data.count === 1 ? "match is" : "matches are"} waiting for a score
+          </p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Kicked off more than {data.thresholdHours} hours ago with no result. Players&apos; points for these are on hold.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={() => setOpen((v) => !v)}>
+            {open ? "Hide" : "Show"}
+          </Button>
+          <Button asChild size="sm" variant="outline">
+            <Link href="/results">Open results</Link>
+          </Button>
+        </div>
+      </div>
+      {open && (
+        <div className="mt-4 divide-y divide-border rounded-lg border border-border">
+          {data.matches.map((m) => (
+            <div key={m._id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
+              <div className="min-w-0">
+                <p className="truncate font-medium">{m.homeTeam} v {m.awayTeam}</p>
+                <p className="text-xs text-muted-foreground">
+                  {m.competitionName} · kicked off {new Date(m.date).toLocaleString()}
+                </p>
+              </div>
+              <span className="num shrink-0 text-xs font-semibold text-destructive">
+                {m.hoursOverdue}h overdue
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+      {data.olderCount > 0 && (
+        <p className="mt-3 text-[11px] text-muted-foreground">
+          Plus {data.olderCount} older unscored matches (over 14 days, mostly last season) not shown.
+        </p>
+      )}
+    </Card>
   );
 }
 

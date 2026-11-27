@@ -682,6 +682,39 @@ export async function getAdminWithdrawals(page = 1, status?: string): Promise<Ad
   }));
 }
 
+// Matches that kicked off hours ago and still have no score — GET /v1/admins/matches/unscored
+export type UnscoredMatch = {
+  _id: string;
+  matchId: string;
+  homeTeam: string;
+  awayTeam: string;
+  date: string;
+  status: string;
+  competitionName: string;
+  competitionCode: string;
+  hoursOverdue: number;
+  lastCheckedAt: string | null;
+};
+
+export type UnscoredMatches = {
+  thresholdHours: number;
+  count: number;
+  olderCount: number;
+  matches: UnscoredMatch[];
+};
+
+export async function getUnscoredMatches(hours = 3): Promise<UnscoredMatches> {
+  const res = await apiFetch<UnscoredMatches>(`/v1/admins/matches/unscored?hours=${hours}`, {
+    token: getToken(),
+  });
+  return {
+    thresholdHours: res.thresholdHours ?? hours,
+    count: res.count ?? 0,
+    olderCount: res.olderCount ?? 0,
+    matches: res.matches ?? [],
+  };
+}
+
 // Manually settle a match — POST /v1/admins/matches/:matchId/settle
 export async function settleMatch(
   matchId: string,
